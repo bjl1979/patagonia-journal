@@ -49,3 +49,4 @@ which is how two phones (iPhone + Android) are combined.
   (proxy blocks it), so real-sync checks happen on Bobby's phones. Next: confirm setup.sql run + user created + sign-ups off; sign in on both phones.
 - 2026-11-07 (v1.2.2): real-phone bug — Android entries made before sync (no `dirty` flag) never uploaded while badge said synced. Fixed: undefined dirty = needs push; sync now pulls before pushing.
 - 2026-11-07 (v1.2.3): Android species ID photo showed gallery only (newer Android picker hides camera). Non-iOS now gets a Take photo / Choose from gallery menu; iOS keeps its native sheet.
+- 2026-11-07 (v1.2.4): delete needs two confirmations (confirm, then type DELETE). Media tombstones now keep only id/entryId/kind/mime.

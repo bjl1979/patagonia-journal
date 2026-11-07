@@ -1,5 +1,5 @@
 // Field Journal — offline travel diary. Phase 1: capture. Phase 2 (later): book builder.
-const APP_VERSION = '1.2.3';
+const APP_VERSION = '1.2.4';
 const SPECIES = [
   'Puma', 'Guanaco', 'Andean Condor', "Darwin's Rhea (Ñandú)", 'Huemul', 'Culpeo Fox',
   'South American Grey Fox', 'Patagonian Hog-nosed Skunk', 'Pichi (Armadillo)', 'Magellanic Penguin',
@@ -45,8 +45,8 @@ const liveMediaAll = async () => (await DB.all('media')).filter(m => !m.deleted)
 async function tombstoneMedia(id) {
   const m = await DB.get('media', id);
   if (!m) return;
-  const { blob, thumb, ...meta } = m;
-  await DB.put('media', { ...meta, deleted: true, updated: Date.now(), dirty: true });
+  // keep only what's needed to remove the cloud copy; no photo, names or details stay behind
+  await DB.put('media', { id: m.id, entryId: m.entryId, kind: m.kind, mime: m.mime, uploaded: m.uploaded, deleted: true, updated: Date.now(), dirty: true });
 }
 
 // ---------------- boot ----------------
@@ -443,8 +443,16 @@ async function saveEditor() {
 }
 
 async function deleteEntry() {
-  if (!confirm('Delete this entry and its photos and recordings? This cannot be undone.')) return;
   const id = editor.entry.id;
+  const media = (await DB.mediaFor(id)).filter(m => !m.deleted);
+  const nPhotos = media.filter(m => m.kind === 'photo').length, nAudio = media.filter(m => m.kind === 'audio').length;
+  const what = [nPhotos && `${nPhotos} photo${nPhotos > 1 ? 's' : ''}`, nAudio && `${nAudio} voice note${nAudio > 1 ? 's' : ''}`].filter(Boolean).join(' and ');
+  // Step 1 of 2
+  if (!confirm(`Delete this entry${what ? ' with its ' + what : ''}?\n\nIt will be removed from both phones and from the cloud.`)) return;
+  // Step 2 of 2: typed confirmation, so a double tap can never delete anything
+  const typed = prompt('This cannot be undone.\n\nType DELETE to confirm.');
+  if (typed === null) return;
+  if (typed.trim().toUpperCase() !== 'DELETE') { toast('Not deleted — you need to type DELETE'); return; }
   for (const m of await DB.mediaFor(id)) if (!m.deleted) await tombstoneMedia(m.id);
   const e = await DB.get('entries', id);
   // keep a tombstone so the delete reaches the other phone and the cloud
