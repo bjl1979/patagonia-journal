@@ -1,5 +1,5 @@
 // Field Journal — offline travel diary. Phase 1: capture. Phase 2 (later): book builder.
-const APP_VERSION = '1.2.2';
+const APP_VERSION = '1.2.3';
 const SPECIES = [
   'Puma', 'Guanaco', 'Andean Condor', "Darwin's Rhea (Ñandú)", 'Huemul', 'Culpeo Fox',
   'South American Grey Fox', 'Patagonian Hog-nosed Skunk', 'Pichi (Armadillo)', 'Magellanic Penguin',
@@ -236,7 +236,14 @@ function wireEditor() {
   $('#deleteBtn').addEventListener('click', deleteEntry);
   $('#cameraInput').addEventListener('change', (e) => addPhotos(e.target.files, e.target));
   $('#galleryInput').addEventListener('change', (e) => addPhotos(e.target.files, e.target));
-  $('#speciesPhotoInput').addEventListener('change', (e) => { if (editor?.photoForSpecies) addPhotos(e.target.files, e.target, editor.photoForSpecies); });
+  for (const id of ['#speciesPhotoInput', '#speciesCameraInput'])
+    $(id).addEventListener('change', (e) => { if (editor?.photoForSpecies) addPhotos(e.target.files, e.target, editor.photoForSpecies); });
+  // iPhone's picker already offers camera + library; Android's newer picker hides the camera, so offer both.
+  const closeChooser = () => { $('#chooser').hidden = true; };
+  $('#chooseCamera').addEventListener('click', () => { closeChooser(); $('#speciesCameraInput').click(); });
+  $('#chooseGallery').addEventListener('click', () => { closeChooser(); $('#speciesPhotoInput').click(); });
+  $('#chooseCancel').addEventListener('click', closeChooser);
+  $('#chooser').addEventListener('click', (e) => { if (e.target.id === 'chooser') closeChooser(); });
   $('#recBtn').addEventListener('click', toggleRecord);
   $('#addSpeciesBtn').addEventListener('click', () => addSpecies($('#speciesInput').value));
   $('#speciesInput').addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); addSpecies(e.target.value); } });
@@ -396,7 +403,13 @@ async function renderChips() {
     for (const m of liveMedia().filter(m => m.species === name)) removeMedia(m.id, true);
     ed.entry.species.splice(+b.dataset.i, 1); renderChips();
   }));
-  $$('#speciesChips .sp-cam').forEach(b => b.addEventListener('click', () => { ed.photoForSpecies = b.dataset.s; $('#speciesPhotoInput').click(); }));
+  $$('#speciesChips .sp-cam').forEach(b => b.addEventListener('click', () => {
+    ed.photoForSpecies = b.dataset.s;
+    const iOS = /iPhone|iPad|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+    if (iOS) return $('#speciesPhotoInput').click();
+    $('#chooserTitle').textContent = `ID photo · ${b.dataset.s}`;
+    $('#chooser').hidden = false;
+  }));
   $('#speciesHint').hidden = !ed.entry.species.length;
   // quick picks: your own most-used species first, then Patagonia favourites
   const counts = {};

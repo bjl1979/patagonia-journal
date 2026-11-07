@@ -115,6 +115,7 @@
       <div class="chips" id="speciesChips"></div>
       <p class="muted small" id="speciesHint" hidden>Tap 📷 on a species to add its ID photo.</p>
       <input type="file" id="speciesPhotoInput" accept="image/*" hidden>
+      <input type="file" id="speciesCameraInput" accept="image/*" capture="environment" hidden>
       <div class="row">
         <input id="speciesInput" list="speciesSuggest" placeholder="Add species… e.g. Puma">
         <button class="btn small" id="addSpeciesBtn">Add</button>
@@ -131,6 +132,14 @@
     </div>
   </div>
 
+  <div class="chooser-backdrop" id="chooser" hidden>
+    <div class="chooser" role="dialog" aria-label="Add ID photo">
+      <strong id="chooserTitle">ID photo</strong>
+      <button class="btn primary wide" id="chooseCamera">📷 Take photo</button>
+      <button class="btn wide" id="chooseGallery">🖼 Choose from gallery</button>
+      <button class="link wide" id="chooseCancel">Cancel</button>
+    </div>
+  </div>
   <div class="viewer" id="viewer" hidden></div>
   <div class="toast" id="toast" hidden></div>
 

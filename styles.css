@@ -213,3 +213,12 @@ html.sheet-open, html.sheet-open body { overflow: hidden; }
 
 img[src=""] { visibility: hidden; }
 .entry .thumbs img, .sp-thumb { background: var(--chip); }
+
+/* photo source chooser (Android) */
+.chooser-backdrop { position: fixed; inset: 0; z-index: 26; background: rgba(0,0,0,.45); display: flex; align-items: flex-end; }
+.chooser {
+  width: 100%; max-width: 680px; margin: 0 auto; background: var(--surface); border-radius: 20px 20px 0 0;
+  padding: 18px 16px calc(16px + var(--safe-b)); display: flex; flex-direction: column;
+}
+.chooser strong { text-align: center; font-size: 15px; color: var(--muted); }
+.chooser .link.wide { width: 100%; margin-top: 8px; padding: 12px; }
