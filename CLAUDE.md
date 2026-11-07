@@ -29,3 +29,5 @@ which is how two phones (iPhone + Android) are combined.
 - 2026-11-07: Phase 1 built and tested end to end in a mobile browser emulator. Pushed to github.com/bjl1979/patagonia-journal
   (public), GitHub Pages enabled from `main` / root. Live at https://bjl1979.github.io/patagonia-journal/.
   Next: Bobby installs on iPhone + Android and does a real-world field test before 30 Nov; fix anything that comes up.
+- 2026-11-07 (v1.0.1): iPhone field-test fix — editor Save button was off screen. Editor is now a full-screen page with notch padding,
+  plus a second Save at the bottom. Service worker switched to network-first so updates reach phones on next open.

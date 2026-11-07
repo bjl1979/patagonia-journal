@@ -1,5 +1,5 @@
 // Field Journal — offline travel diary. Phase 1: capture. Phase 2 (later): book builder.
-const APP_VERSION = '1.0.0';
+const APP_VERSION = '1.0.1';
 const SPECIES = [
   'Puma', 'Guanaco', 'Andean Condor', "Darwin's Rhea (Ñandú)", 'Huemul', 'Culpeo Fox',
   'South American Grey Fox', 'Patagonian Hog-nosed Skunk', 'Pichi (Armadillo)', 'Magellanic Penguin',
@@ -176,6 +176,7 @@ function wireEditor() {
   $('#cancelBtn').addEventListener('click', closeEditor);
   $('#sheetBackdrop').addEventListener('click', closeEditor);
   $('#saveBtn').addEventListener('click', saveEditor);
+  $('#saveBtn2').addEventListener('click', saveEditor);
   $('#deleteBtn').addEventListener('click', deleteEntry);
   $('#cameraInput').addEventListener('change', (e) => addPhotos(e.target.files, e.target));
   $('#galleryInput').addEventListener('change', (e) => addPhotos(e.target.files, e.target));
@@ -205,6 +206,7 @@ async function openEditor(id, mode) {
   $('#whenText').textContent = new Date(editor.entry.at).toLocaleString([], { timeZone: editor.entry.tz, dateStyle: 'medium', timeStyle: 'short' });
   renderEditorMedia(); renderChips(); setGPSText();
   $('#sheetBackdrop').hidden = false; $('#sheet').hidden = false;
+  document.documentElement.classList.add('sheet-open'); $('.sheet-body').scrollTop = 0;
 
   if (isNew) locate();
   if (mode === 'photo') $('#cameraInput').click();
@@ -217,6 +219,7 @@ function closeEditor() {
   editor?.editorURLs.forEach(URL.revokeObjectURL);
   editor = null;
   $('#sheet').hidden = true; $('#sheetBackdrop').hidden = true;
+  document.documentElement.classList.remove('sheet-open');
 }
 
 function setGPSText(state) {
