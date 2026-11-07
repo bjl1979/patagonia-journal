@@ -43,5 +43,5 @@ which is how two phones (iPhone + Android) are combined.
   plus a second Save at the bottom. Service worker switched to network-first so updates reach phones on next open.
 - 2026-11-07 (v1.1.0): species ID photos — 📷 on each species tag in the editor, avatars on timeline chips, thumbnails + per-species gallery on Species tab.
 - 2026-11-07 (v1.2.0): cloud sync built and tested on mock. OneDrive stays the archive via Save backup.
-  Next: Bobby sends Supabase Project URL + anon/publishable key → put in config.js; he runs setup.sql, creates his user,
-  disables sign-ups; sign in on both phones and test sync for real.
+- 2026-11-07 (v1.2.1): config.js connected to Bobby's Supabase project (mwtnoarhuizfozvnolci). The Claude workspace cannot reach supabase.co
+  (proxy blocks it), so real-sync checks happen on Bobby's phones. Next: confirm setup.sql run + user created + sign-ups off; sign in on both phones.
