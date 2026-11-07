@@ -63,15 +63,18 @@ const Sync = (() => {
   const pathFor = (m) => `${session.user.id}/${m.id}.${EXT[(m.mime || '').split(';')[0]] || 'bin'}`;
   const metaOf = (m) => { const { blob, thumb, dirty, uploaded, offloaded, needsDownload, ...meta } = m; return meta; };
   const entryData = (e) => { const { dirty, ...data } = e; return data; };
+  // Items saved before sync existed have no `dirty` flag at all: they still need uploading.
+  const entryNeedsPush = (e) => e.dirty === true || e.dirty === undefined;
+  const mediaNeedsPush = (m) => m.dirty === true || (m.dirty === undefined && !m.uploaded);
 
   async function countPending() {
     const [es, ms] = await Promise.all([DB.all('entries'), DB.all('media')]);
-    return es.filter(e => e.dirty).length + ms.filter(m => m.dirty).length;
+    return es.filter(entryNeedsPush).length + ms.filter(mediaNeedsPush).length;
   }
 
   // ---------- push ----------
   async function pushEntries() {
-    const dirty = (await DB.all('entries')).filter(e => e.dirty);
+    const dirty = (await DB.all('entries')).filter(entryNeedsPush);
     for (let i = 0; i < dirty.length; i += 200) {
       const batch = dirty.slice(i, i + 200);
       await api('/rest/v1/entries?on_conflict=id', {
@@ -87,7 +90,7 @@ const Sync = (() => {
   }
 
   async function pushMedia() {
-    const dirty = (await DB.all('media')).filter(m => m.dirty);
+    const dirty = (await DB.all('media')).filter(mediaNeedsPush);
     for (const m of dirty) {
       const path = pathFor(m);
       if (m.deleted) {
@@ -139,7 +142,7 @@ const Sync = (() => {
 
     for (const r of eRows) {
       const local = await DB.get('entries', r.id);
-      if (!local || ((r.updated || 0) > (local.updated || 0) && !(local.dirty && (local.updated || 0) >= r.updated))) {
+      if (!local || (r.updated || 0) > (local.updated || 0)) {   // newer edit wins, whichever phone made it
         await DB.put('entries', { ...r.data, id: r.id, updated: r.updated, deleted: r.deleted, dirty: false });
         changed++;
       }
@@ -179,9 +182,11 @@ const Sync = (() => {
     if (!navigator.onLine) { set({ status: 'offline', pending: await countPending() }); return 0; }
     set({ status: 'syncing', error: null, pending: await countPending() });
     try {
+      // Pull first: if the cloud already has a newer edit, it replaces the phone copy before
+      // anything is uploaded, so an older copy can never overwrite a newer one.
+      const changed = await pull(full);
       await pushEntries();
       await pushMedia();
-      const changed = await pull(full);
       const got = await downloadMissing();
       const lastSync = Date.now();
       await DB.setSetting('lastSync', lastSync);

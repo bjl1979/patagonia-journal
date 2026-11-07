@@ -14,7 +14,9 @@ Long-term goal: turn the journal into a photography book.
 
 ## Cloud sync (v1.2.0)
 - Offline-first. Every local change sets `dirty: true`; deletes are tombstones (`deleted: true`, media blob dropped) so they sync.
-- Sync order: push entries → upload media files + rows → pull entries/media changed since `cloudCursor` (server_ts, 10 s overlap) → download missing files.
+- Sync order (v1.2.2): pull entries/media changed since `cloudCursor` (server_ts, 10 s overlap) → push entries → upload media files + rows → download missing files.
+  Pull-first means a newer cloud edit replaces an older phone copy before anything uploads.
+- Items saved before sync existed have `dirty` undefined (and media no `uploaded`) — these count as needing upload.
 - Conflicts: newer `updated` wins. Triggers: app open, back online, visible again, 2.5 s after a save, every 5 min, "Sync now".
 - Auth: email + password user created in the Supabase dashboard (sign-ups disabled). Session stored in IndexedDB settings; refresh token keeps it signed in.
 - "Free up space": photos already uploaded keep only a 480 px `thumb` (`offloaded: true`); full copy fetched from cloud on demand (gallery, backup export).
@@ -45,3 +47,4 @@ which is how two phones (iPhone + Android) are combined.
 - 2026-11-07 (v1.2.0): cloud sync built and tested on mock. OneDrive stays the archive via Save backup.
 - 2026-11-07 (v1.2.1): config.js connected to Bobby's Supabase project (mwtnoarhuizfozvnolci). The Claude workspace cannot reach supabase.co
   (proxy blocks it), so real-sync checks happen on Bobby's phones. Next: confirm setup.sql run + user created + sign-ups off; sign in on both phones.
+- 2026-11-07 (v1.2.2): real-phone bug — Android entries made before sync (no `dirty` flag) never uploaded while badge said synced. Fixed: undefined dirty = needs push; sync now pulls before pushing.
