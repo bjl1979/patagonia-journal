@@ -1,8 +1,8 @@
 // Offline support: keep the app shell cached so it opens with no signal.
 // Bump CACHE when any app file changes so phones pick up the new version.
-const CACHE = 'field-journal-v3';
+const CACHE = 'field-journal-v4';
 const SHELL = [
-  './', 'index.html', 'styles.css', 'app.js', 'db.js', 'utils.js', 'manifest.webmanifest',
+  './', 'index.html', 'styles.css', 'app.js', 'db.js', 'utils.js', 'config.js', 'sync.js', 'manifest.webmanifest',
   'icons/icon-192.png', 'icons/icon-512.png', 'icons/apple-touch-icon.png',
 ];
 

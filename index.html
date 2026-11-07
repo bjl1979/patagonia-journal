@@ -38,8 +38,24 @@
     </section>
     <section id="view-settings" class="view">
       <div class="card">
+        <h2>Cloud sync</h2>
+        <div id="cloudNotSetUp"><p class="muted">Cloud sync isn't connected yet.</p></div>
+        <div id="cloudSignedOut" hidden>
+          <p class="muted">Sign in once on each phone. Entries, photos and voice notes then sync automatically whenever there's signal, and a full copy is kept in your cloud.</p>
+          <label class="field">Email <input id="cloudEmail" type="email" autocomplete="username" inputmode="email"></label>
+          <label class="field">Password <input id="cloudPassword" type="password" autocomplete="current-password"></label>
+          <button class="btn primary wide" id="cloudSignInBtn">Sign in</button>
+        </div>
+        <div id="cloudSignedIn" hidden>
+          <p class="stat" id="cloudStatus"></p>
+          <button class="btn primary wide" id="cloudSyncBtn">Sync now</button>
+          <button class="btn wide" id="cloudFreeBtn">Free up space on this phone</button>
+          <button class="link small" id="cloudSignOutBtn">Sign out</button>
+        </div>
+      </div>
+      <div class="card">
         <h2>Backup &amp; merge</h2>
-        <p class="muted">Everything lives on this phone only. Save a backup whenever you have Wi‑Fi — send it to your Drive, OneDrive or email. To combine two phones, open the other phone's backup here.</p>
+        <p class="muted">A complete archive file of your journal, photos and voice notes. Send it to OneDrive now and then as a second, independent copy. Without cloud sync, you can also combine two phones by opening one phone's backup on the other.</p>
         <p class="stat" id="lastBackup"></p>
         <button class="btn primary wide" id="exportBtn">Save backup</button>
         <label class="btn wide" for="importInput">Open a backup / merge another phone</label>
@@ -118,8 +134,10 @@
   <div class="viewer" id="viewer" hidden></div>
   <div class="toast" id="toast" hidden></div>
 
+  <script src="config.js"></script>
   <script src="db.js"></script>
   <script src="utils.js"></script>
+  <script src="sync.js"></script>
   <script src="app.js"></script>
 </body>
 </html>

@@ -1,5 +1,5 @@
 // Field Journal — offline travel diary. Phase 1: capture. Phase 2 (later): book builder.
-const APP_VERSION = '1.1.0';
+const APP_VERSION = '1.2.0';
 const SPECIES = [
   'Puma', 'Guanaco', 'Andean Condor', "Darwin's Rhea (Ñandú)", 'Huemul', 'Culpeo Fox',
   'South American Grey Fox', 'Patagonian Hog-nosed Skunk', 'Pichi (Armadillo)', 'Magellanic Penguin',
@@ -38,7 +38,16 @@ function toast(msg, ms = 2600) {
   t.textContent = msg; t.hidden = false;
   clearTimeout(toast._t); toast._t = setTimeout(() => (t.hidden = true), ms);
 }
-function trackURL(blob) { const u = URL.createObjectURL(blob); urls.push(u); return u; }
+function trackURL(blob) { if (!blob) return ''; const u = URL.createObjectURL(blob); urls.push(u); return u; }
+const src = (m) => m.blob || m.thumb;                      // full photo, or preview if freed to the cloud
+const liveEntries = async () => (await DB.all('entries')).filter(e => !e.deleted);
+const liveMediaAll = async () => (await DB.all('media')).filter(m => !m.deleted);
+async function tombstoneMedia(id) {
+  const m = await DB.get('media', id);
+  if (!m) return;
+  const { blob, thumb, ...meta } = m;
+  await DB.put('media', { ...meta, deleted: true, updated: Date.now(), dirty: true });
+}
 
 // ---------------- boot ----------------
 async function boot() {
@@ -59,17 +68,36 @@ async function boot() {
   $$('.cap').forEach(b => b.addEventListener('click', () => openEditor(null, b.dataset.mode)));
   wireEditor();
   wireBackup();
-  updateNet();
   addEventListener('online', updateNet); addEventListener('offline', updateNet);
 
   if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(() => {});
-  renderAll();
+  wireCloud();
+  await renderAll();
+  Sync.init(() => renderAll());
 }
 
-function updateNet() {
+function updateNet() { renderSyncState(Sync.state); }
+function ago(ms) {
+  const m = Math.round((Date.now() - ms) / 60000);
+  return m < 1 ? 'just now' : m < 60 ? m + ' min ago' : m < 1440 ? Math.round(m / 60) + ' h ago' : Math.round(m / 1440) + ' d ago';
+}
+function renderSyncState(st) {
   const b = $('#netBadge');
-  b.classList.toggle('off', !navigator.onLine);
-  b.textContent = navigator.onLine ? '● online' : '● offline — all good';
+  let text, warn = false;
+  if (!st.configured || !st.signedIn) { text = navigator.onLine ? '● online' : '● offline — saved on phone'; warn = !navigator.onLine; }
+  else if (!navigator.onLine || st.status === 'offline') { text = `● offline${st.pending ? ' · ' + st.pending + ' to sync' : ' — saved on phone'}`; warn = true; }
+  else if (['syncing', 'uploading', 'downloading'].includes(st.status)) text = st.status === 'uploading' ? `● uploading${st.pending ? ' ' + st.pending : ''}…` : st.status === 'downloading' ? '● downloading…' : '● syncing…';
+  else if (st.status === 'error') { text = '● sync paused'; warn = true; }
+  else text = st.pending ? `● ${st.pending} to sync` : `● synced${st.lastSync ? ' ' + ago(st.lastSync) : ''}`;
+  b.textContent = text; b.classList.toggle('off', warn);
+  const c = $('#cloudStatus');
+  if (c) {
+    $('#cloudSignedOut').hidden = !st.configured || st.signedIn;
+    $('#cloudSignedIn').hidden = !st.signedIn;
+    $('#cloudNotSetUp').hidden = st.configured;
+    if (st.signedIn) c.textContent = `Signed in as ${st.email}. ` + (st.status === 'error' ? 'Sync paused: ' + st.error
+      : st.pending ? `${st.pending} change${st.pending > 1 ? 's' : ''} waiting for signal.` : st.lastSync ? `Everything synced ${ago(st.lastSync)}.` : 'Not synced yet.');
+  }
 }
 
 function showView(v) {
@@ -82,8 +110,8 @@ function showView(v) {
 // ---------------- rendering ----------------
 async function renderAll() {
   urls.forEach(URL.revokeObjectURL); urls = [];
-  const entries = (await DB.all('entries')).sort((a, b) => b.at - a.at);
-  const media = await DB.all('media');
+  const entries = (await liveEntries()).sort((a, b) => b.at - a.at);
+  const media = await liveMediaAll();
   const byEntry = {};
   for (const m of media) (byEntry[m.entryId] ||= []).push(m);
 
@@ -96,6 +124,7 @@ async function renderAll() {
   renderTimeline(entries, byEntry);
   renderSpecies(entries, media);
   renderBackupInfo(entries.length);
+  renderSyncState(Sync.state);
 }
 
 function renderTimeline(entries, byEntry) {
@@ -125,9 +154,9 @@ function renderTimeline(entries, byEntry) {
       html += `<article class="entry" data-id="${e.id}">
         <div class="when"><span>${fmtTime(e.at, e.tz)}</span>${e.place ? `<span class="place">${U.esc(e.place)}</span>` : ''}${e.lat != null ? `<span>📍${e.lat.toFixed(3)}, ${e.lon.toFixed(3)}</span>` : ''}${e.device ? `<span>· ${U.esc(e.device)}</span>` : ''}</div>
         ${e.text ? `<p class="text">${U.esc(e.text)}</p>` : ''}
-        ${photos.length ? `<div class="thumbs">${photos.map(p => `<img src="${trackURL(p.blob)}" alt="" loading="lazy">`).join('')}</div>` : ''}
-        ${audio.map(a => `<audio controls preload="none" src="${trackURL(a.blob)}"></audio>`).join('')}
-        ${(e.species || []).length ? `<div class="chips tags">${e.species.map(s => { const p = idPhoto(s); return `<span class="chip${p ? ' has-av' : ''}">${p ? `<img class="av" src="${trackURL(p.blob)}" alt="">` : ''}${U.esc(s)}</span>`; }).join('')}</div>` : ''}
+        ${photos.length ? `<div class="thumbs">${photos.map(p => `<img src="${trackURL(src(p))}" alt="" loading="lazy">`).join('')}</div>` : ''}
+        ${audio.map(a => a.blob ? `<audio controls preload="none" src="${trackURL(a.blob)}"></audio>` : '<p class="muted small">🎙 voice note downloading…</p>').join('')}
+        ${(e.species || []).length ? `<div class="chips tags">${e.species.map(s => { const p = idPhoto(s); return `<span class="chip${p ? ' has-av' : ''}">${p ? `<img class="av" src="${trackURL(src(p))}" alt="">` : ''}${U.esc(s)}</span>`; }).join('')}</div>` : ''}
       </article>`;
     }
   }
@@ -160,7 +189,7 @@ function renderSpecies(entries, media = []) {
       const k = dayKey(t.first.at, t.first.tz), td = tripDay(k);
       const ph = idPhotos[s] || [];
       return `<div class="sp-row" data-s="${U.esc(s)}">
-        ${ph.length ? `<img class="sp-thumb" src="${trackURL(ph[0].blob)}" alt="">` : '<span class="sp-thumb none">🐾</span>'}
+        ${ph.length ? `<img class="sp-thumb" src="${trackURL(src(ph[0]))}" alt="">` : '<span class="sp-thumb none">🐾</span>'}
         <div class="sp-info"><div class="n">${U.esc(s)}</div>
         <div class="d">First: ${td ? 'Day ' + td : U.esc(fmtDay(k))}${t.first.place ? ' · ' + U.esc(t.first.place) : ''}${ph.length ? ` · ${ph.length} ID photo${ph.length > 1 ? 's' : ''}` : ''}</div></div>
         <span class="sp-count">${t.n}</span></div>`;
@@ -174,8 +203,14 @@ function openGallery(species) {
   if (!list.length) { toast('No ID photos yet — open an entry and tap 📷 on this species'); return; }
   const v = $('#viewer');
   v.innerHTML = `<div class="viewer-head"><strong>${U.esc(species)}</strong><button class="link" id="viewerClose">Close</button></div>
-    <div class="viewer-grid">${list.map(m => `<figure><img src="${trackURL(m.blob)}" alt=""><figcaption>${new Date(m.takenAt).toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' })}</figcaption></figure>`).join('')}</div>`;
+    <div class="viewer-grid">${list.map(m => `<figure><img data-id="${m.id}" src="${trackURL(src(m))}" alt=""><figcaption>${new Date(m.takenAt).toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' })}</figcaption></figure>`).join('')}</div>`;
   v.hidden = false; document.documentElement.classList.add('sheet-open');
+  // swap previews for full photos from the cloud where the phone copy was freed
+  list.filter(m => !m.blob).forEach(async (m) => {
+    const full = await Sync.fullBlob(m);
+    const img = v.querySelector(`img[data-id="${m.id}"]`);
+    if (full && img && full !== m.thumb) img.src = trackURL(full);
+  });
   $('#viewerClose').addEventListener('click', () => { v.hidden = true; v.innerHTML = ''; document.documentElement.classList.remove('sheet-open'); });
 }
 
@@ -212,11 +247,11 @@ async function openEditor(id, mode) {
   const entry = isNew
     ? { id: U.uid(), at: Date.now(), tz: deviceTZ(), offsetMin: -new Date().getTimezoneOffset(), device: settings.deviceName, text: '', species: [], place: '', lat: null, lon: null, created: Date.now() }
     : await DB.get('entries', id);
-  const existing = isNew ? [] : await DB.mediaFor(id);
+  const existing = isNew ? [] : (await DB.mediaFor(id)).filter(m => !m.deleted);
   editor = { entry: { ...entry, species: [...(entry.species || [])] }, isNew, existing, added: [], removed: new Set(), editorURLs: [], recorder: null };
 
   if (isNew) {
-    const last = (await DB.all('entries')).sort((a, b) => b.at - a.at)[0];
+    const last = (await liveEntries()).sort((a, b) => b.at - a.at)[0];
     if (last && Date.now() - last.at < 3 * 3600e3) editor.entry.place = editor.carriedPlace = last.place || ''; // carry place forward
   }
 
@@ -294,10 +329,10 @@ const liveMedia = () => [...editor.existing.filter(m => !editor.removed.has(m.id
 
 function renderEditorMedia() {
   editor.editorURLs.forEach(URL.revokeObjectURL); editor.editorURLs = [];
-  const u = (b) => { const x = URL.createObjectURL(b); editor.editorURLs.push(x); return x; };
+  const u = (b) => { if (!b) return ''; const x = URL.createObjectURL(b); editor.editorURLs.push(x); return x; };
   const all = liveMedia();
   $('#photoStrip').innerHTML = all.filter(m => m.kind === 'photo' && !m.species)
-    .map(m => `<div class="ph"><img src="${u(m.blob)}" alt=""><button class="rm" data-id="${m.id}" aria-label="Remove photo">✕</button></div>`).join('');
+    .map(m => `<div class="ph"><img src="${u(src(m))}" alt=""><button class="rm" data-id="${m.id}" aria-label="Remove photo">✕</button></div>`).join('');
   $('#audioList').innerHTML = all.filter(m => m.kind === 'audio')
     .map(m => `<div class="aud"><audio controls src="${u(m.blob)}"></audio><button class="rm" data-id="${m.id}" aria-label="Remove recording">✕</button></div>`).join('');
   $$('#photoStrip .rm, #audioList .rm').forEach(b => b.addEventListener('click', () => removeMedia(b.dataset.id)));
@@ -351,9 +386,9 @@ async function renderChips() {
   const ed = editor;
   $('#speciesChips').innerHTML = ed.entry.species.map((s, i) => {
     const p = liveMedia().find(m => m.species === s);
-    const src = p ? URL.createObjectURL(p.blob) : null;
-    if (src) ed.editorURLs.push(src);
-    return `<span class="sp-chip"><button class="sp-cam${p ? ' has' : ''}" data-s="${U.esc(s)}" aria-label="ID photo for ${U.esc(s)}">${p ? `<img src="${src}" alt="">` : '📷'}</button>
+    const pu = p && src(p) ? URL.createObjectURL(src(p)) : null;
+    if (pu) ed.editorURLs.push(pu);
+    return `<span class="sp-chip"><button class="sp-cam${p ? ' has' : ''}" data-s="${U.esc(s)}" aria-label="ID photo for ${U.esc(s)}">${pu ? `<img src="${pu}" alt="">` : '📷'}</button>
       <span class="sp-name">${U.esc(s)}</span><button class="sp-x" data-i="${i}" aria-label="Remove ${U.esc(s)}">✕</button></span>`;
   }).join('');
   $$('#speciesChips .sp-x').forEach(b => b.addEventListener('click', () => {
@@ -365,7 +400,7 @@ async function renderChips() {
   $('#speciesHint').hidden = !ed.entry.species.length;
   // quick picks: your own most-used species first, then Patagonia favourites
   const counts = {};
-  (await DB.all('entries')).forEach(e => (e.species || []).forEach(s => counts[s] = (counts[s] || 0) + 1));
+  (await liveEntries()).forEach(e => (e.species || []).forEach(s => counts[s] = (counts[s] || 0) + 1));
   const mine = Object.keys(counts).sort((a, b) => counts[b] - counts[a]);
   const picks = [...new Set([...mine, ...QUICK_SPECIES])].filter(s => !editor?.entry.species.includes(s)).slice(0, 8);
   if (!editor) return;
@@ -382,10 +417,11 @@ async function saveEditor() {
   e.place = $('#placeInput').value.trim();
   const keptMedia = editor.existing.filter(m => !editor.removed.has(m.id)).length + editor.added.length;
   if (!e.text && !keptMedia && !e.species.length) { toast('Add a note, photo, voice note or species first'); return; }
-  e.updated = Date.now();
+  e.updated = Date.now(); e.dirty = true;
   await DB.put('entries', e);
-  for (const m of editor.added) await DB.put('media', { ...m, entryId: e.id });
-  for (const id of editor.removed) await DB.del('media', id);
+  for (const m of editor.added) await DB.put('media', { ...m, entryId: e.id, updated: Date.now(), dirty: true });
+  for (const id of editor.removed) await tombstoneMedia(id);
+  Sync.soon();
   if (navigator.storage?.persist) navigator.storage.persist().catch(() => {});
   const wasNew = editor.isNew;
   closeEditor();
@@ -396,9 +432,41 @@ async function saveEditor() {
 async function deleteEntry() {
   if (!confirm('Delete this entry and its photos and recordings? This cannot be undone.')) return;
   const id = editor.entry.id;
-  for (const m of await DB.mediaFor(id)) await DB.del('media', m.id);
-  await DB.del('entries', id);
-  closeEditor(); await renderAll(); toast('Entry deleted');
+  for (const m of await DB.mediaFor(id)) if (!m.deleted) await tombstoneMedia(m.id);
+  const e = await DB.get('entries', id);
+  // keep a tombstone so the delete reaches the other phone and the cloud
+  await DB.put('entries', { id, at: e.at, tz: e.tz, deleted: true, updated: Date.now(), dirty: true });
+  closeEditor(); await renderAll(); Sync.soon(); toast('Entry deleted');
+}
+
+// ---------------- cloud sync UI ----------------
+function wireCloud() {
+  Sync.subscribe(renderSyncState);
+  $('#cloudSignInBtn').addEventListener('click', async () => {
+    const email = $('#cloudEmail').value.trim(), pw = $('#cloudPassword').value;
+    if (!email || !pw) return toast('Enter your email and password');
+    if (!navigator.onLine) return toast('Signing in needs signal — try again on Wi‑Fi');
+    const btn = $('#cloudSignInBtn'); btn.disabled = true; btn.textContent = 'Signing in…';
+    try { await Sync.signIn(email, pw); $('#cloudPassword').value = ''; toast('Signed in — syncing now'); }
+    catch (e) { toast(e.message, 5000); }
+    finally { btn.disabled = false; btn.textContent = 'Sign in'; }
+  });
+  $('#cloudSyncBtn').addEventListener('click', async () => {
+    if (!navigator.onLine) return toast('No signal — your changes are safe on the phone and will sync later');
+    await Sync.run(); const st = Sync.state;
+    toast(st.status === 'error' ? 'Sync problem: ' + st.error : 'All synced', st.status === 'error' ? 6000 : 2600);
+  });
+  $('#cloudFreeBtn').addEventListener('click', async () => {
+    if (Sync.state.pending) return toast('Sync first — some photos are not in the cloud yet');
+    if (!confirm('Remove full-size copies of photos that are safely in the cloud? Small previews stay on the phone, and full photos come back from the cloud when you open them online.')) return;
+    const { count, saved } = await Sync.freeUpSpace();
+    await renderAll(); renderStorage();
+    toast(count ? `Freed ${(saved / 1048576).toFixed(1)} MB from ${count} photos` : 'Nothing to free yet');
+  });
+  $('#cloudSignOutBtn').addEventListener('click', async () => {
+    if (!confirm('Sign out of cloud sync on this phone? Your journal stays on the phone.')) return;
+    await Sync.signOut(); toast('Signed out');
+  });
 }
 
 // ---------------- backup / merge ----------------
@@ -411,7 +479,8 @@ const EXT = { 'image/jpeg': 'jpg', 'audio/mp4': 'm4a', 'audio/webm': 'webm', 'au
 function mediaFileName(m, entry) {
   const tz = entry?.tz || deviceTZ();
   const d = new Date(m.takenAt || entry?.at || Date.now());
-  const stamp = dayKey(d, tz) + '_' + fmtTime(d, tz).replace(/\D/g, '').padStart(4, '0');
+  const hm = new Intl.DateTimeFormat('en-GB', { timeZone: tz, hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }).format(d).replace(/\D/g, '');
+  const stamp = dayKey(d, tz) + '_' + hm;   // 24-hour, e.g. 2026-12-02_1341
   const tag = U.slug(m.species || (entry?.species || [])[0] || entry?.place || '');
   return `media/${stamp}${tag ? '_' + tag : ''}_${m.species ? 'id' : m.kind}_${m.id.slice(0, 8)}.${EXT[m.mime.split(';')[0]] || 'bin'}`;
 }
@@ -420,14 +489,16 @@ async function exportBackup() {
   const btn = $('#exportBtn');
   btn.disabled = true; btn.textContent = 'Preparing backup…';
   try {
-    const entries = (await DB.all('entries')).sort((a, b) => a.at - b.at);
-    const media = await DB.all('media');
+    const entries = (await liveEntries()).sort((a, b) => a.at - b.at).map(({ dirty, ...e }) => e);
+    const media = await liveMediaAll();
     const byId = Object.fromEntries(entries.map(e => [e.id, e]));
     const files = [], mediaIndex = [];
     for (const m of media) {
       const name = mediaFileName(m, byId[m.entryId]);
-      files.push({ name, data: new Uint8Array(await m.blob.arrayBuffer()) });
-      const { blob, ...meta } = m;
+      const full = m.blob || await Sync.fullBlob(m);   // fetch freed photos back from the cloud when online
+      if (!full) continue;
+      files.push({ name, data: new Uint8Array(await full.arrayBuffer()) });
+      const { blob, thumb, dirty, uploaded, offloaded, needsDownload, ...meta } = m;
       mediaIndex.push({ ...meta, file: name });
     }
     const journal = {
@@ -492,16 +563,16 @@ async function importBackup(file) {
     for (const e of j.entries) {
       const { localTime, tripDay: _td, ...clean } = e;
       const cur = existing[e.id];
-      if (!cur) { await DB.put('entries', clean); added++; }
-      else if ((e.updated || 0) > (cur.updated || 0)) { await DB.put('entries', clean); updated++; }
+      if (!cur) { await DB.put('entries', { ...clean, dirty: true }); added++; }
+      else if ((e.updated || 0) > (cur.updated || 0)) { await DB.put('entries', { ...clean, dirty: true }); updated++; }
     }
     for (const m of j.media) {
       if (existingMedia.has(m.id) || !files[m.file]) continue;
       const { file: f, ...meta } = m;
-      await DB.put('media', { ...meta, blob: new Blob([files[m.file]], { type: m.mime }) });
+      await DB.put('media', { ...meta, blob: new Blob([files[m.file]], { type: m.mime }), dirty: true });
       mediaAdded++;
     }
-    await renderAll();
+    await renderAll(); Sync.soon();
     toast(`Merged from ${j.device || 'backup'}: ${added} new, ${updated} updated, ${mediaAdded} photos/recordings`, 5000);
   } catch (e) {
     toast('Could not open backup: ' + e.message, 6000);

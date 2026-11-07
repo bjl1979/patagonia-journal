@@ -8,7 +8,17 @@ Long-term goal: turn the journal into a photography book.
 - Installs to the home screen on iPhone (Safari → Share → Add to Home Screen) and Android (Chrome → Install app).
 - All data is stored on the phone in IndexedDB (`db.js`). Nothing is sent to any server.
 - `sw.js` caches the app so it opens with no signal. **Bump `CACHE` in sw.js and `APP_VERSION` in app.js on every change.**
-- Files: `index.html` (layout), `styles.css`, `app.js` (all app logic), `db.js` (storage), `utils.js` (EXIF reader, photo resize, zip writer/reader).
+- Files: `index.html` (layout), `styles.css`, `app.js` (all app logic), `db.js` (storage), `utils.js` (EXIF reader, photo resize, zip writer/reader),
+  `sync.js` (Supabase cloud sync, plain fetch), `config.js` (Supabase URL + anon/publishable key — public by design; never the service_role key),
+  `setup.sql` (tables, RLS, private `journal` storage bucket — paste into Supabase SQL Editor).
+
+## Cloud sync (v1.2.0)
+- Offline-first. Every local change sets `dirty: true`; deletes are tombstones (`deleted: true`, media blob dropped) so they sync.
+- Sync order: push entries → upload media files + rows → pull entries/media changed since `cloudCursor` (server_ts, 10 s overlap) → download missing files.
+- Conflicts: newer `updated` wins. Triggers: app open, back online, visible again, 2.5 s after a save, every 5 min, "Sync now".
+- Auth: email + password user created in the Supabase dashboard (sign-ups disabled). Session stored in IndexedDB settings; refresh token keeps it signed in.
+- "Free up space": photos already uploaded keep only a 480 px `thumb` (`offloaded: true`); full copy fetched from cloud on demand (gallery, backup export).
+- Tested against a local mock of the Supabase endpoints with two simulated phones (iPhone + Android).
 
 ## Data model
 - Entry: id, at (epoch ms), tz, offsetMin, device, text, species[], place, lat/lon/acc/alt, created, updated.
@@ -32,4 +42,6 @@ which is how two phones (iPhone + Android) are combined.
 - 2026-11-07 (v1.0.1): iPhone field-test fix — editor Save button was off screen. Editor is now a full-screen page with notch padding,
   plus a second Save at the bottom. Service worker switched to network-first so updates reach phones on next open.
 - 2026-11-07 (v1.1.0): species ID photos — 📷 on each species tag in the editor, avatars on timeline chips, thumbnails + per-species gallery on Species tab.
-  Next: auto sync via Supabase (Bobby creating the project) + cloud copy of all media + "Free up space"; OneDrive stays the archive via Save backup.
+- 2026-11-07 (v1.2.0): cloud sync built and tested on mock. OneDrive stays the archive via Save backup.
+  Next: Bobby sends Supabase Project URL + anon/publishable key → put in config.js; he runs setup.sql, creates his user,
+  disables sign-ups; sign in on both phones and test sync for real.
