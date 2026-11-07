@@ -1,5 +1,5 @@
 // Field Journal — offline travel diary. Phase 1: capture. Phase 2 (later): book builder.
-const APP_VERSION = '1.3.0';
+const APP_VERSION = '1.4.0';
 const SPECIES = [
   'Puma', 'Guanaco', 'Andean Condor', "Darwin's Rhea (Ñandú)", 'Huemul', 'Culpeo Fox',
   'South American Grey Fox', 'Patagonian Hog-nosed Skunk', 'Pichi (Armadillo)', 'Magellanic Penguin',
@@ -109,7 +109,8 @@ function renderSyncState(st) {
 function showView(v) {
   $$('.tab').forEach(t => t.classList.toggle('active', t.dataset.view === v));
   $$('.view').forEach(s => s.classList.toggle('active', s.id === 'view-' + v));
-  $('#captureBar').style.display = v === 'settings' || v === 'calendar' ? 'none' : '';
+  $('#captureBar').style.display = ['settings', 'calendar', 'map'].includes(v) ? 'none' : '';
+  if (v === 'map') showMap();
   if (v === 'settings') renderStorage();
 }
 
@@ -131,6 +132,7 @@ async function renderAll() {
   renderDayStrip(entries);
   renderTimeline(entries, byEntry);
   renderCalendar(entries, byEntry);
+  if ($('#view-map').classList.contains('active')) renderMap(); else mapStale = true;
   renderSpecies(entries, media);
   renderBackupInfo(entries.length);
   renderSyncState(Sync.state);
@@ -241,6 +243,97 @@ function renderTimeline(entries, byEntry) {
     if (ev.target.closest('audio')) return;
     openEditor(a.dataset.id);
   }));
+}
+
+// ---------------- map: route = entries joined in time order, one colour per day ----------------
+const DAY_COLOURS = ['#2f6f73', '#c2793a', '#7b5ea7', '#3f8f4e', '#b4423a', '#2a6cb0', '#a0782b', '#c0508c', '#4f7d8a', '#6b8e23', '#8c5a3c', '#3c5a99'];
+let map = null, mapLayer = null, mapBase = {}, mapDay = 'all', mapStale = true;
+
+function haversineKm(a, b) {
+  const R = 6371, rad = (x) => x * Math.PI / 180;
+  const dLat = rad(b.lat - a.lat), dLon = rad(b.lon - a.lon);
+  const h = Math.sin(dLat / 2) ** 2 + Math.cos(rad(a.lat)) * Math.cos(rad(b.lat)) * Math.sin(dLon / 2) ** 2;
+  return 2 * R * Math.asin(Math.sqrt(h));
+}
+
+function ensureMap() {
+  if (map || !window.L) return !!map;
+  map = L.map('map', { zoomControl: true, attributionControl: true, worldCopyJump: true }).setView([-50.9, -72.9], 7);
+  mapBase.map = L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19, attribution: '© OpenStreetMap contributors' });
+  mapBase.terrain = L.tileLayer('https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png', { maxZoom: 17, subdomains: 'abc', attribution: '© OpenStreetMap contributors, SRTM · style © OpenTopoMap (CC-BY-SA)' });
+  mapBase.map.addTo(map);
+  map.attributionControl.setPrefix('<a href="https://leafletjs.com">Leaflet</a>');
+  mapLayer = L.layerGroup().addTo(map);
+  $$('.seg button').forEach(b => b.addEventListener('click', () => {
+    $$('.seg button').forEach(x => x.classList.toggle('on', x === b));
+    Object.values(mapBase).forEach(l => map.removeLayer(l));
+    mapBase[b.dataset.layer].addTo(map);
+  }));
+  $('#mapDay').addEventListener('change', (e) => { mapDay = e.target.value; renderMap(true); });
+  map.on('popupopen', (ev) => {
+    const btn = ev.popup.getElement()?.querySelector('[data-open-day]');
+    if (btn) btn.addEventListener('click', () => { map.closePopup(); selectDay(btn.dataset.openDay); showView('timeline'); });
+  });
+  return true;
+}
+
+function showMap() {
+  if (!ensureMap()) { $('#mapStats').textContent = 'Map could not load.'; return; }
+  setTimeout(() => { map.invalidateSize(); if (mapStale) renderMap(true); }, 60);
+}
+
+function renderMap(fit = false) {
+  if (!map) return;
+  mapStale = false;
+  const { entries, byEntry } = lastData;
+  const located = entries.filter(e => e.lat != null && e.lon != null).sort((a, b) => a.at - b.at);
+  const groups = groupByDay(located);
+  const days = [...groups.keys()].sort();
+  if (mapDay !== 'all' && !groups.has(mapDay)) mapDay = 'all';
+  $('#mapDay').innerHTML = `<option value="all">Whole trip${days.length ? ` · ${days.length} day${days.length > 1 ? 's' : ''}` : ''}</option>` +
+    days.map(k => `<option value="${k}"${k === mapDay ? ' selected' : ''}>${U.esc(dayLabel(k) ? dayLabel(k) + ' · ' : '')}${U.esc(new Date(k + 'T12:00:00').toLocaleDateString([], { weekday: 'short', day: 'numeric', month: 'short' }))}</option>`).join('');
+  $('#mapDay').value = mapDay;
+  mapLayer.clearLayers();
+  $('#mapEmpty').hidden = located.length > 0;
+  const shownDays = mapDay === 'all' ? days : [mapDay];
+  const whole = mapDay === 'all';
+  const bounds = [];
+  let km = 0, stops = 0;
+  // whole trip: faint dashed link from each day's last stop to the next day's first stop
+  if (whole) for (let i = 1; i < days.length; i++) {
+    const a = groups.get(days[i - 1]).slice(-1)[0], b = groups.get(days[i])[0];
+    L.polyline([[a.lat, a.lon], [b.lat, b.lon]], { color: '#69716d', weight: 2, opacity: .6, dashArray: '4 6' }).addTo(mapLayer);
+  }
+  shownDays.forEach((k) => {
+    const list = groups.get(k);
+    const colour = DAY_COLOURS[days.indexOf(k) % DAY_COLOURS.length];
+    const pts = list.map(e => [e.lat, e.lon]);
+    for (let i = 1; i < list.length; i++) km += haversineKm(list[i - 1], list[i]);
+    stops += list.length;
+    if (pts.length > 1) L.polyline(pts, { color: colour, weight: 4, opacity: .85, lineJoin: 'round' }).addTo(mapLayer);
+    list.forEach((e, i) => {
+      bounds.push([e.lat, e.lon]);
+      const photo = (byEntry[e.id] || []).find(m => m.kind === 'photo' && src(m));
+      const icon = whole
+        ? L.divIcon({ className: 'pin', html: `<span class="dot" style="background:${colour}"></span>`, iconSize: [16, 16], iconAnchor: [8, 8] })
+        : L.divIcon({ className: 'pin', html: `<span style="background:${colour}">${i + 1}</span>`, iconSize: [28, 28], iconAnchor: [14, 14] });
+      const html = `<div class="pop"><div class="pop-when">${U.esc(dayLabel(k) || fmtDay(k))} · ${fmtTime(e.at, e.tz)}</div>
+        ${e.place ? `<div class="pop-place">${U.esc(e.place)}</div>` : ''}
+        ${photo ? `<img src="${trackURL(src(photo))}" alt="">` : ''}
+        ${e.text ? `<div class="pop-text">${U.esc(e.text.length > 90 ? e.text.slice(0, 90) + '…' : e.text)}</div>` : ''}
+        ${(e.species || []).length ? `<div class="pop-sp">${e.species.map(U.esc).join(' · ')}</div>` : ''}
+        <button class="btn small" data-open-day="${k}">Open this day</button></div>`;
+      L.marker([e.lat, e.lon], { icon }).bindPopup(html, { maxWidth: 240 }).addTo(mapLayer);
+    });
+  });
+  // colour key: tap a day to zoom into it
+  $('#mapKey').innerHTML = whole && days.length > 1 ? days.map((k, i) => `<button class="key" data-k="${k}"><i style="background:${DAY_COLOURS[i % DAY_COLOURS.length]}"></i>${U.esc((dayLabel(k) || new Date(k + 'T12:00:00').toLocaleDateString([], { day: 'numeric', month: 'short' })).replace('Day ', 'D'))}</button>`).join('') : '';
+  $$('#mapKey .key').forEach(b => b.addEventListener('click', () => { mapDay = b.dataset.k; renderMap(true); }));
+  const what = mapDay === 'all' ? 'Whole trip' : (dayLabel(mapDay) || fmtDay(mapDay));
+  $('#mapStats').textContent = located.length
+    ? `${what} · ${stops} stop${stops === 1 ? '' : 's'} · ${km < 10 ? km.toFixed(1) : Math.round(km)} km between entries${navigator.onLine ? '' : ' · offline'}`
+    : '';
+  if (fit && bounds.length) map.fitBounds(bounds, { padding: [36, 36], maxZoom: 14 });
 }
 
 // ---------------- calendar ----------------

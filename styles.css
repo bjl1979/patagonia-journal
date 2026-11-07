@@ -275,3 +275,29 @@ img[src=""] { visibility: hidden; }
 .peek .row2 b { color: var(--ink); font-weight: 600; }
 .tabs .tab { font-size: 14px; }
 .cal .gap { grid-column: 1 / -1; text-align: center; color: var(--muted); font-size: 14px; line-height: 1; padding: 2px 0 4px; letter-spacing: .3em; }
+
+/* map */
+.map-bar { display: flex; gap: 8px; align-items: center; margin: 4px 0 6px; }
+.map-bar select { flex: 1; min-width: 0; font: inherit; color: var(--ink); background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 10px; }
+.seg { display: flex; background: var(--chip); border-radius: 12px; padding: 3px; flex: none; }
+.seg button { border: 0; background: none; font: inherit; font-size: 14px; padding: 7px 10px; border-radius: 9px; color: var(--muted); }
+.seg button.on { background: var(--surface); color: var(--ink); font-weight: 600; box-shadow: 0 1px 3px rgba(0,0,0,.12); }
+.map-stats { font-size: 13px; font-weight: 600; margin: 4px 2px 8px; min-height: 18px; }
+.map-wrap { position: relative; border-radius: 16px; overflow: hidden; box-shadow: var(--shadow); }
+#map { height: calc(100dvh - 300px); min-height: 340px; background: #dfe5e2; }
+.map-empty { position: absolute; inset: 0; display: grid; place-items: center; text-align: center; padding: 24px; color: var(--muted); background: rgba(244,241,234,.85); z-index: 500; }
+.pin { background: none; border: 0; }
+.pin span { display: grid; place-items: center; width: 28px; height: 28px; border-radius: 50%; color: #fff; font: 700 11px -apple-system, sans-serif; border: 2px solid #fff; box-shadow: 0 2px 6px rgba(0,0,0,.35); }
+.pop { font: 14px/1.35 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+.pop-when { font-size: 12px; color: #69716d; }
+.pop-place { font-weight: 700; color: #2f6f73; margin-top: 2px; }
+.pop img { width: 100%; height: 120px; object-fit: cover; border-radius: 8px; margin-top: 6px; display: block; }
+.pop-text { margin-top: 6px; }
+.pop-sp { margin-top: 6px; font-size: 12px; color: #69716d; }
+.pop .btn { margin-top: 8px; width: 100%; }
+.leaflet-container { font-family: inherit; }
+.tabs .tab { font-size: 13.5px; }
+.pin .dot { width: 16px; height: 16px; border-width: 3px; }
+.map-key { display: flex; flex-wrap: wrap; gap: 6px; margin: -2px 0 8px; }
+.map-key .key { display: inline-flex; align-items: center; gap: 5px; border: 0; background: var(--surface); box-shadow: var(--shadow); border-radius: 999px; padding: 4px 10px; font: 600 12px -apple-system, sans-serif; color: var(--ink); }
+.map-key .key i { width: 10px; height: 10px; border-radius: 50%; }

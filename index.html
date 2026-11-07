@@ -12,6 +12,7 @@
   <link rel="manifest" href="manifest.webmanifest">
   <link rel="icon" href="icons/icon-192.png">
   <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+  <link rel="stylesheet" href="vendor/leaflet/leaflet.css">
   <link rel="stylesheet" href="styles.css">
 </head>
 <body>
@@ -26,6 +27,7 @@
   <nav class="tabs" role="tablist">
     <button class="tab active" data-view="timeline">Journal</button>
     <button class="tab" data-view="calendar">Calendar</button>
+    <button class="tab" data-view="map">Map</button>
     <button class="tab" data-view="species">Species</button>
     <button class="tab" data-view="settings">Backup</button>
   </nav>
@@ -37,6 +39,18 @@
     </section>
     <section id="view-calendar" class="view">
       <div id="calendar"></div>
+    </section>
+    <section id="view-map" class="view">
+      <div class="map-bar">
+        <select id="mapDay" aria-label="Which day to show"></select>
+        <div class="seg" role="group" aria-label="Map style">
+          <button data-layer="map" class="on">Map</button><button data-layer="terrain">Terrain</button>
+        </div>
+      </div>
+      <p class="map-stats" id="mapStats"></p>
+      <div class="map-key" id="mapKey"></div>
+      <div class="map-wrap"><div id="map"></div><div class="map-empty" id="mapEmpty" hidden>No locations yet. Entries saved with GPS appear here as your route.</div></div>
+      <p class="muted small" id="mapNote">Route joins your entries in time order. Map areas you've viewed online stay available offline.</p>
     </section>
     <section id="view-species" class="view">
       <div id="speciesList"></div>
@@ -151,6 +165,7 @@
   <div class="viewer" id="viewer" hidden></div>
   <div class="toast" id="toast" hidden></div>
 
+  <script src="vendor/leaflet/leaflet.js"></script>
   <script src="config.js"></script>
   <script src="db.js"></script>
   <script src="utils.js"></script>
