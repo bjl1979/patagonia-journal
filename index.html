@@ -25,13 +25,18 @@
 
   <nav class="tabs" role="tablist">
     <button class="tab active" data-view="timeline">Journal</button>
+    <button class="tab" data-view="calendar">Calendar</button>
     <button class="tab" data-view="species">Species</button>
     <button class="tab" data-view="settings">Backup</button>
   </nav>
 
   <main>
     <section id="view-timeline" class="view active">
+      <div class="day-strip" id="dayStrip"></div>
       <div id="timeline"></div>
+    </section>
+    <section id="view-calendar" class="view">
+      <div id="calendar"></div>
     </section>
     <section id="view-species" class="view">
       <div id="speciesList"></div>
@@ -69,6 +74,9 @@
         </label>
         <label class="field">Trip starts
           <input type="date" id="tripStart">
+        </label>
+        <label class="field">Trip length (days)
+          <input type="number" id="tripLength" min="1" max="90" inputmode="numeric">
         </label>
         <label class="field">Trip name
           <input id="tripName" placeholder="Patagonia">

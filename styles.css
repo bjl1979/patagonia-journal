@@ -222,3 +222,56 @@ img[src=""] { visibility: hidden; }
 }
 .chooser strong { text-align: center; font-size: 15px; color: var(--muted); }
 .chooser .link.wide { width: 100%; margin-top: 8px; padding: 12px; }
+
+/* day strip */
+.day-strip { display: flex; gap: 8px; overflow-x: auto; padding: 4px 2px 10px; margin: 0 -16px; padding-left: 16px; padding-right: 16px; scrollbar-width: none; scroll-behavior: smooth; }
+.day-strip::-webkit-scrollbar { display: none; }
+.dchip {
+  flex: none; width: 60px; border: 0; border-radius: 14px; background: var(--surface); box-shadow: var(--shadow);
+  text-align: center; padding: 7px 0 6px; font: inherit; font-size: 12px; color: var(--muted); cursor: pointer;
+}
+.dchip b { display: block; font-size: 16px; color: var(--ink); font-family: Georgia, serif; }
+.dchip .cnt { display: inline-block; margin-top: 3px; background: var(--chip); color: var(--ink); border-radius: 999px; padding: 0 8px; font-weight: 700; min-width: 22px; }
+.dchip.today { outline: 2px solid var(--warm); outline-offset: -2px; }
+.dchip.sel { background: var(--accent); color: var(--accent-ink); outline: none; }
+.dchip.sel b { color: var(--accent-ink); }
+.dchip.sel .cnt { background: rgba(255,255,255,.25); color: var(--accent-ink); }
+.dchip.future:not(.sel) { opacity: .5; box-shadow: none; }
+/* day summary card */
+.daycard { background: #14211f; color: #eef1ec; border-radius: 16px; padding: 14px; margin: 2px 0 12px; }
+.daycard h2 { font-size: 20px; }
+.daycard .sub { font-size: 13px; opacity: .75; margin-top: 3px; }
+.daycard .stats { display: flex; gap: 18px; margin-top: 10px; font-size: 13px; }
+.daycard .stats b { display: block; font-size: 19px; font-family: Georgia, serif; color: #e0a062; }
+.todaytag { font: 600 11px -apple-system, sans-serif; background: var(--warm); color: #fff; border-radius: 999px; padding: 2px 8px; vertical-align: 3px; text-transform: uppercase; letter-spacing: .05em; }
+.small-empty { padding: 24px 16px; }
+/* calendar */
+.cal { background: var(--surface); border-radius: 16px; box-shadow: var(--shadow); padding: 12px 10px; margin: 4px 0 12px; }
+.cal h3 { font-size: 18px; padding: 2px 6px 8px; display: flex; justify-content: space-between; align-items: center; }
+.cal h3 span { font: 13px -apple-system, sans-serif; color: var(--muted); }
+.cal .grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px; }
+.cal .dow { font-size: 11px; color: var(--muted); text-align: center; padding-bottom: 2px; font-weight: 600; }
+.cal .cell {
+  height: 56px; border: 0; border-radius: 10px; padding: 5px 4px; font: inherit; font-size: 13px; text-align: left;
+  position: relative; color: var(--muted); background: transparent; cursor: pointer; display: block;
+}
+.cal .cell.trip { background: var(--chip); color: var(--ink); }
+.cal .cell.today { outline: 2px solid var(--warm); outline-offset: -2px; }
+.cal .cell.sel { box-shadow: inset 0 0 0 2px var(--accent); }
+.cal .cell .mon { display: block; font-size: 9px; text-transform: uppercase; font-weight: 700; color: var(--warm); line-height: 1; }
+.cal .cell .tday { display: block; font-size: 10px; color: var(--accent); font-weight: 700; }
+.cal .cell .n {
+  position: absolute; right: 4px; bottom: 4px; min-width: 20px; height: 20px; border-radius: 10px; background: var(--accent);
+  color: var(--accent-ink); font-size: 11px; font-weight: 700; display: grid; place-items: center; padding: 0 5px;
+}
+.cal .cell .n.lo { opacity: .6; }
+.cal .cell .n.hi { background: var(--warm); color: #fff; }
+.legend { display: flex; gap: 14px; font-size: 12px; color: var(--muted); padding: 8px 6px 0; flex-wrap: wrap; }
+.legend i { display: inline-block; width: 10px; height: 10px; border-radius: 5px; margin-right: 5px; vertical-align: -1px; }
+.lg-trip { background: var(--chip); } .lg-hi { background: var(--warm); } .lg-today { outline: 2px solid var(--warm); outline-offset: -2px; }
+.peek { background: var(--surface); border-radius: 16px; box-shadow: var(--shadow); padding: 12px 14px; }
+.peek h4 { margin: 0 0 6px; font-family: Georgia, serif; font-size: 17px; }
+.peek .row2 { font-size: 13px; color: var(--muted); margin-top: 6px; }
+.peek .row2 b { color: var(--ink); font-weight: 600; }
+.tabs .tab { font-size: 14px; }
+.cal .gap { grid-column: 1 / -1; text-align: center; color: var(--muted); font-size: 14px; line-height: 1; padding: 2px 0 4px; letter-spacing: .3em; }

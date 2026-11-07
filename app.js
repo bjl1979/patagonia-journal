@@ -1,5 +1,5 @@
 // Field Journal — offline travel diary. Phase 1: capture. Phase 2 (later): book builder.
-const APP_VERSION = '1.2.4';
+const APP_VERSION = '1.3.0';
 const SPECIES = [
   'Puma', 'Guanaco', 'Andean Condor', "Darwin's Rhea (Ñandú)", 'Huemul', 'Culpeo Fox',
   'South American Grey Fox', 'Patagonian Hog-nosed Skunk', 'Pichi (Armadillo)', 'Magellanic Penguin',
@@ -54,14 +54,20 @@ async function boot() {
   settings.deviceName = await DB.setting('deviceName', /iPhone|iPad/.test(navigator.userAgent) ? 'iPhone' : /Android/.test(navigator.userAgent) ? 'Android' : 'Phone');
   settings.tripStart = await DB.setting('tripStart', '2026-11-30');
   settings.tripName = await DB.setting('tripName', 'Patagonia');
+  settings.tripLength = await DB.setting('tripLength', 12);
   settings.lastBackup = await DB.setting('lastBackup', null);
 
   $('#deviceName').value = settings.deviceName;
   $('#tripStart').value = settings.tripStart;
   $('#tripName').value = settings.tripName;
-  for (const [id, key] of [['#deviceName', 'deviceName'], ['#tripStart', 'tripStart'], ['#tripName', 'tripName']]) {
-    $(id).addEventListener('change', async (e) => { settings[key] = e.target.value.trim(); await DB.setSetting(key, settings[key]); renderAll(); });
+  $('#tripLength').value = settings.tripLength;
+  for (const [id, key] of [['#deviceName', 'deviceName'], ['#tripStart', 'tripStart'], ['#tripName', 'tripName'], ['#tripLength', 'tripLength']]) {
+    $(id).addEventListener('change', async (e) => {
+      settings[key] = key === 'tripLength' ? Math.max(1, Math.min(90, parseInt(e.target.value, 10) || 12)) : e.target.value.trim();
+      await DB.setSetting(key, settings[key]); renderAll();
+    });
   }
+  wireDayNav();
 
   $('#speciesSuggest').innerHTML = SPECIES.map(s => `<option value="${U.esc(s)}">`).join('');
   $$('.tab').forEach(b => b.addEventListener('click', () => showView(b.dataset.view)));
@@ -103,7 +109,7 @@ function renderSyncState(st) {
 function showView(v) {
   $$('.tab').forEach(t => t.classList.toggle('active', t.dataset.view === v));
   $$('.view').forEach(s => s.classList.toggle('active', s.id === 'view-' + v));
-  $('#captureBar').style.display = v === 'settings' ? 'none' : '';
+  $('#captureBar').style.display = v === 'settings' || v === 'calendar' ? 'none' : '';
   if (v === 'settings') renderStorage();
 }
 
@@ -121,50 +127,173 @@ async function renderAll() {
   $('#tripLine').textContent = `${settings.tripName || 'Trip'} · Field Journal`;
   $('#dayTitle').textContent = td ? `Day ${td}` : (settings.tripStart > todayKey ? `${Math.ceil((new Date(settings.tripStart) - new Date(todayKey)) / 864e5)} days to go` : 'Field Journal');
 
+  lastData = { entries, byEntry };
+  renderDayStrip(entries);
   renderTimeline(entries, byEntry);
+  renderCalendar(entries, byEntry);
   renderSpecies(entries, media);
   renderBackupInfo(entries.length);
   renderSyncState(Sync.state);
 }
 
+// ---------------- days: Journal shows one day at a time (today by default) ----------------
+let selectedDay = null;       // 'YYYY-MM-DD'
+let followToday = true;       // keep showing "today" until Bobby picks another day
+let lastData = { entries: [], byEntry: {} };
+const todayKey = () => dayKey(Date.now(), deviceTZ());
+const addDays = (key, n) => { const d = new Date(key + 'T12:00:00'); d.setDate(d.getDate() + n); return dayKey(d.getTime(), deviceTZ()); };
+const tripEnd = () => settings.tripStart ? addDays(settings.tripStart, (settings.tripLength || 12) - 1) : null;
+const entryDay = (e) => dayKey(e.at, e.tz);
+function dayLabel(k) { const td = tripDay(k); return td && k <= tripEnd() ? `Day ${td}` : null; }
+
+function groupByDay(entries) {
+  const g = new Map();
+  for (const e of entries) { const k = entryDay(e); if (!g.has(k)) g.set(k, []); g.get(k).push(e); }
+  return g;
+}
+
+// Days shown in the strip: every trip day, every day with entries, and today.
+function stripDays(entries) {
+  const set = new Set(entries.map(entryDay));
+  set.add(todayKey());
+  if (settings.tripStart) for (let i = 0; i < (settings.tripLength || 12); i++) set.add(addDays(settings.tripStart, i));
+  return [...set].sort();
+}
+
+function selectDay(k, { fromUser = true } = {}) {
+  selectedDay = k;
+  if (fromUser) followToday = k === todayKey();
+  renderDayStrip(lastData.entries);
+  renderTimeline(lastData.entries, lastData.byEntry);
+  window.scrollTo({ top: 0 });
+}
+
+function wireDayNav() {
+  // swipe left/right on the journal to move between days
+  let x0 = null, y0 = 0;
+  const el = $('#view-timeline');
+  el.addEventListener('touchstart', (e) => { if (e.target.closest('.day-strip, audio')) return; x0 = e.touches[0].clientX; y0 = e.touches[0].clientY; }, { passive: true });
+  el.addEventListener('touchend', (e) => {
+    if (x0 == null) return;
+    const dx = e.changedTouches[0].clientX - x0, dy = e.changedTouches[0].clientY - y0; x0 = null;
+    if (Math.abs(dx) < 70 || Math.abs(dy) > 50) return;
+    const days = stripDays(lastData.entries), i = days.indexOf(selectedDay);
+    const next = days[i + (dx < 0 ? 1 : -1)];
+    if (next) selectDay(next);
+  }, { passive: true });
+  // a new day while the app sits open: move to it if Bobby was following today
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible' && followToday && selectedDay !== todayKey()) selectDay(todayKey(), { fromUser: false });
+  });
+}
+
+function renderDayStrip(entries) {
+  if (!selectedDay) selectedDay = todayKey();
+  const groups = groupByDay(entries), today = todayKey();
+  const days = stripDays(entries);
+  const el = $('#dayStrip');
+  el.innerHTML = days.map(k => {
+    const n = (groups.get(k) || []).length, lbl = dayLabel(k);
+    const d = new Date(k + 'T12:00:00');
+    return `<button class="dchip${k === selectedDay ? ' sel' : ''}${k > today ? ' future' : ''}${k === today ? ' today' : ''}" data-k="${k}">
+      <span>${lbl || d.toLocaleDateString([], { month: 'short' })}</span><b>${d.getDate()}</b><span class="cnt">${n || '–'}</span></button>`;
+  }).join('');
+  el.querySelectorAll('.dchip').forEach(b => b.addEventListener('click', () => selectDay(b.dataset.k)));
+  const sel = el.querySelector('.sel');
+  if (sel) el.scrollLeft = sel.offsetLeft - el.clientWidth / 2 + sel.offsetWidth / 2;
+}
+
 function renderTimeline(entries, byEntry) {
   const el = $('#timeline');
-  if (!entries.length) {
-    el.innerHTML = `<div class="empty"><h2>Your journal starts here</h2>
-      <p>Tap <b>Voice</b>, <b>Photo</b> or <b>Note</b> below. Every entry gets the time and your GPS position automatically — no signal needed.</p></div>`;
-    return;
+  const k = selectedDay || todayKey();
+  const list = entries.filter(e => entryDay(e) === k).sort((a, b) => a.at - b.at);   // morning → evening
+  const lbl = dayLabel(k), isToday = k === todayKey();
+  const media = list.flatMap(e => byEntry[e.id] || []);
+  const species = new Set(list.flatMap(e => e.species || []));
+  const places = [...new Set(list.map(e => e.place).filter(Boolean))];
+  const route = places.length > 3 ? [places[0], '…', places[places.length - 1]] : places;
+  let html = `<div class="daycard">
+    <h2>${lbl ? lbl + ' · ' : ''}${U.esc(fmtDay(k))}${isToday ? ' <span class="todaytag">today</span>' : ''}</h2>
+    ${route.length ? `<div class="sub">${route.map(U.esc).join(' → ')}</div>` : ''}
+    <div class="stats"><div><b>${list.length}</b>entr${list.length === 1 ? 'y' : 'ies'}</div><div><b>${species.size}</b>species</div>
+      <div><b>${media.filter(m => m.kind === 'photo').length}</b>photos</div><div><b>${media.filter(m => m.kind === 'audio').length}</b>voice</div></div>
+  </div>`;
+  if (!list.length) {
+    html += entries.length || !isToday
+      ? `<div class="empty small-empty"><p>${isToday ? 'Nothing logged today yet.' : k > todayKey() ? 'This day is still ahead.' : 'No entries on this day.'}</p>${isToday ? '<p>Tap <b>Voice</b>, <b>Photo</b> or <b>Note</b> below.</p>' : ''}</div>`
+      : `<div class="empty"><h2>Your journal starts here</h2><p>Tap <b>Voice</b>, <b>Photo</b> or <b>Note</b> below. Every entry gets the time and your GPS position automatically — no signal needed.</p></div>`;
   }
-  const groups = new Map();
-  for (const e of entries) {
-    const k = dayKey(e.at, e.tz);
-    if (!groups.has(k)) groups.set(k, []);
-    groups.get(k).push(e);
-  }
-  let html = '';
-  for (const [k, list] of groups) {
-    const td = tripDay(k);
-    const species = new Set(list.flatMap(e => e.species || []));
-    html += `<div class="day"><h2>${td ? 'Day ' + td : U.esc(fmtDay(k))}</h2>
-      <span class="sub">${td ? U.esc(fmtDay(k)) + ' · ' : ''}${list.length} entr${list.length > 1 ? 'ies' : 'y'}${species.size ? ' · ' + species.size + ' species' : ''}</span></div>`;
-    for (const e of list) {
-      const m = byEntry[e.id] || [];
-      const photos = m.filter(x => x.kind === 'photo' && !x.species);
-      const idPhoto = (s) => m.find(x => x.kind === 'photo' && x.species === s);
-      const audio = m.filter(x => x.kind === 'audio');
-      html += `<article class="entry" data-id="${e.id}">
-        <div class="when"><span>${fmtTime(e.at, e.tz)}</span>${e.place ? `<span class="place">${U.esc(e.place)}</span>` : ''}${e.lat != null ? `<span>📍${e.lat.toFixed(3)}, ${e.lon.toFixed(3)}</span>` : ''}${e.device ? `<span>· ${U.esc(e.device)}</span>` : ''}</div>
-        ${e.text ? `<p class="text">${U.esc(e.text)}</p>` : ''}
-        ${photos.length ? `<div class="thumbs">${photos.map(p => `<img src="${trackURL(src(p))}" alt="" loading="lazy">`).join('')}</div>` : ''}
-        ${audio.map(a => a.blob ? `<audio controls preload="none" src="${trackURL(a.blob)}"></audio>` : '<p class="muted small">🎙 voice note downloading…</p>').join('')}
-        ${(e.species || []).length ? `<div class="chips tags">${e.species.map(s => { const p = idPhoto(s); return `<span class="chip${p ? ' has-av' : ''}">${p ? `<img class="av" src="${trackURL(src(p))}" alt="">` : ''}${U.esc(s)}</span>`; }).join('')}</div>` : ''}
-      </article>`;
-    }
+  for (const e of list) {
+    const m = byEntry[e.id] || [];
+    const photos = m.filter(x => x.kind === 'photo' && !x.species);
+    const idPhoto = (s) => m.find(x => x.kind === 'photo' && x.species === s);
+    const audio = m.filter(x => x.kind === 'audio');
+    html += `<article class="entry" data-id="${e.id}">
+      <div class="when"><span>${fmtTime(e.at, e.tz)}</span>${e.place ? `<span class="place">${U.esc(e.place)}</span>` : ''}${e.lat != null ? `<span>📍${e.lat.toFixed(3)}, ${e.lon.toFixed(3)}</span>` : ''}${e.device ? `<span>· ${U.esc(e.device)}</span>` : ''}</div>
+      ${e.text ? `<p class="text">${U.esc(e.text)}</p>` : ''}
+      ${photos.length ? `<div class="thumbs">${photos.map(p => `<img src="${trackURL(src(p))}" alt="" loading="lazy">`).join('')}</div>` : ''}
+      ${audio.map(a => a.blob ? `<audio controls preload="none" src="${trackURL(a.blob)}"></audio>` : '<p class="muted small">🎙 voice note downloading…</p>').join('')}
+      ${(e.species || []).length ? `<div class="chips tags">${e.species.map(s => { const p = idPhoto(s); return `<span class="chip${p ? ' has-av' : ''}">${p ? `<img class="av" src="${trackURL(src(p))}" alt="">` : ''}${U.esc(s)}</span>`; }).join('')}</div>` : ''}
+    </article>`;
   }
   el.innerHTML = html;
   el.querySelectorAll('.entry').forEach(a => a.addEventListener('click', (ev) => {
     if (ev.target.closest('audio')) return;
     openEditor(a.dataset.id);
   }));
+}
+
+// ---------------- calendar ----------------
+function renderCalendar(entries, byEntry) {
+  const groups = groupByDay(entries), today = todayKey();
+  const keys = [...groups.keys(), today, settings.tripStart, tripEnd()].filter(Boolean).sort();
+  // whole weeks (Mon–Sun) from the first relevant day to the last
+  const monday = (k) => { const d = new Date(k + 'T12:00:00'); return addDays(k, -((d.getDay() + 6) % 7)); };
+  let start = monday(keys[0]);
+  const end = addDays(monday(keys[keys.length - 1]), 6);
+  const max = Math.max(0, ...[...groups.values()].map(l => l.length));
+  const first = new Date(start + 'T12:00:00'), last = new Date(end + 'T12:00:00');
+  const title = first.getMonth() === last.getMonth() ? first.toLocaleDateString([], { month: 'long', year: 'numeric' })
+    : `${first.toLocaleDateString([], { month: 'short' })} – ${last.toLocaleDateString([], { month: 'short', year: 'numeric' })}`;
+  let cells = '', prevShown = null;
+  for (let k = start; k <= end; k = addDays(k, 1)) {
+    const n = (groups.get(k) || []).length, d = new Date(k + 'T12:00:00');
+    const inTrip = settings.tripStart && k >= settings.tripStart && k <= tripEnd();
+    if (d.getDay() === 1) {
+      // only show weeks that matter: trip days, days with entries, today — collapse the rest
+      let keep = false;
+      for (let i = 0; i < 7; i++) { const kk = addDays(k, i); if (groups.has(kk) || kk === today || (settings.tripStart && kk >= settings.tripStart && kk <= tripEnd())) keep = true; }
+      if (!keep) { k = addDays(k, 6); continue; }
+      if (prevShown && prevShown !== addDays(k, -7)) cells += '<div class="gap">⋯</div>';
+      prevShown = k;
+    }
+    const lvl = !n ? '' : n === max && max > 1 ? ' hi' : n < max / 2 ? ' lo' : '';
+    cells += `<button class="cell${inTrip ? ' trip' : ''}${k === today ? ' today' : ''}${k === selectedDay ? ' sel' : ''}" data-k="${k}" aria-label="${U.esc(fmtDay(k))}, ${n} entries">
+      ${d.getDate() === 1 ? `<span class="mon">${d.toLocaleDateString([], { month: 'short' })}</span>` : ''}${d.getDate()}
+      ${inTrip ? `<span class="tday">D${tripDay(k)}</span>` : ''}${n ? `<span class="n${lvl}">${n}</span>` : ''}</button>`;
+  }
+  // trip totals
+  const tripEntries = settings.tripStart ? entries.filter(e => { const k = entryDay(e); return k >= settings.tripStart && k <= tripEnd(); }) : [];
+  const pool = tripEntries.length ? tripEntries : entries;
+  const species = new Set(pool.flatMap(e => e.species || []));
+  const photos = pool.flatMap(e => byEntry[e.id] || []).filter(m => m.kind === 'photo').length;
+  let best = null;
+  for (const [k, l] of groups) if (!best || l.length > best[1].length) best = [k, l];
+  let bestText = '';
+  if (best) {
+    const sp = [...new Set(best[1].flatMap(e => e.species || []))].slice(0, 2);
+    bestText = `${dayLabel(best[0]) || fmtDay(best[0])} — ${best[1].length} entr${best[1].length === 1 ? 'y' : 'ies'}${sp.length ? ', ' + sp.join(' + ') : ''}`;
+  }
+  $('#calendar').innerHTML = `<div class="cal">
+      <h3>${U.esc(title)} <span>${settings.tripStart ? (settings.tripLength || 12) + '-day trip' : ''}</span></h3>
+      <div class="grid">${['M', 'T', 'W', 'T', 'F', 'S', 'S'].map(d => `<div class="dow">${d}</div>`).join('')}${cells}</div>
+      <div class="legend"><span><i class="lg-trip"></i>trip day</span><span><i class="lg-hi"></i>busiest</span><span><i class="lg-today"></i>today</span></div>
+    </div>
+    <div class="peek"><h4>Tap a day to open it in Journal</h4>
+      <div class="row2">${tripEntries.length ? 'Trip so far' : 'So far'}: <b>${pool.length} entr${pool.length === 1 ? 'y' : 'ies'}</b> · <b>${species.size} species</b> · <b>${photos} photos</b></div>
+      ${bestText ? `<div class="row2">Best day: <b>${U.esc(bestText)}</b></div>` : ''}
+    </div>`;
+  $$('#calendar .cell').forEach(c => c.addEventListener('click', () => { selectDay(c.dataset.k); showView('timeline'); }));
 }
 
 function renderSpecies(entries, media = []) {
@@ -437,8 +566,11 @@ async function saveEditor() {
   Sync.soon();
   if (navigator.storage?.persist) navigator.storage.persist().catch(() => {});
   const wasNew = editor.isNew;
+  const savedDay = entryDay(e);
   closeEditor();
+  if (savedDay !== selectedDay) { selectedDay = savedDay; followToday = savedDay === todayKey(); }
   await renderAll();
+  document.querySelector(`.entry[data-id="${e.id}"]`)?.scrollIntoView({ block: 'center' });
   toast(wasNew ? 'Saved to your journal' : 'Entry updated');
 }
 
