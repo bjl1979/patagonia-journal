@@ -1,5 +1,5 @@
 // Field Journal — offline travel diary. Phase 1: capture. Phase 2 (later): book builder.
-const APP_VERSION = '1.4.0';
+const APP_VERSION = '1.4.1';
 const SPECIES = [
   'Puma', 'Guanaco', 'Andean Condor', "Darwin's Rhea (Ñandú)", 'Huemul', 'Culpeo Fox',
   'South American Grey Fox', 'Patagonian Hog-nosed Skunk', 'Pichi (Armadillo)', 'Magellanic Penguin',
@@ -467,6 +467,20 @@ function wireEditor() {
   $('#chooseCancel').addEventListener('click', closeChooser);
   $('#chooser').addEventListener('click', (e) => { if (e.target.id === 'chooser') closeChooser(); });
   $('#recBtn').addEventListener('click', toggleRecord);
+  // tap the date/time to change it
+  $('#whenBtn').addEventListener('click', () => {
+    const inp = $('#whenInput');
+    inp.value = toLocalInput(editor.entry.at);
+    inp.hidden = false; inp.focus();
+    try { inp.showPicker?.(); } catch (e) { /* some browsers need a direct tap */ }
+  });
+  $('#whenInput').addEventListener('change', (e) => {
+    if (!e.target.value || !editor) return;
+    const t = new Date(e.target.value).getTime();
+    if (isNaN(t)) return;
+    editor.entry.at = t; editor.entry.tz = deviceTZ(); editor.timeFromPhoto = false;
+    updateWhen();
+  });
   $('#addSpeciesBtn').addEventListener('click', () => addSpecies($('#speciesInput').value));
   $('#speciesInput').addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); addSpecies(e.target.value); } });
 }
@@ -489,7 +503,8 @@ async function openEditor(id, mode) {
   $('#placeInput').value = editor.entry.place || '';
   $('#speciesInput').value = '';
   $('#deleteBtn').hidden = isNew;
-  $('#whenText').textContent = new Date(editor.entry.at).toLocaleString([], { timeZone: editor.entry.tz, dateStyle: 'medium', timeStyle: 'short' });
+  $('#whenInput').hidden = true;
+  updateWhen();
   renderEditorMedia(); renderChips(); setGPSText();
   $('#sheetBackdrop').hidden = false; $('#sheet').hidden = false;
   document.documentElement.classList.add('sheet-open'); $('.sheet-body').scrollTop = 0;
@@ -527,6 +542,12 @@ function locate() {
   }, { enableHighAccuracy: true, timeout: 25000, maximumAge: 60000 });
 }
 
+function updateWhen() {
+  const e = editor.entry;
+  $('#whenText').textContent = new Date(e.at).toLocaleString([], { timeZone: e.tz, dateStyle: 'medium', timeStyle: 'short' }) + (editor.timeFromPhoto ? ' · from photo' : '');
+}
+const toLocalInput = (ms) => { const d = new Date(ms); const p = (n) => String(n).padStart(2, '0'); return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}T${p(d.getHours())}:${p(d.getMinutes())}`; };
+
 async function addPhotos(files, input, species = null) {
   if (species) {
     // one ID photo per species per entry: replace any earlier one
@@ -538,15 +559,20 @@ async function addPhotos(files, input, species = null) {
     const blob = await U.resizeImage(f);
     const taken = exif?.taken ? U.exifToDate(exif.taken) : null;
     editor.added.push({ id: U.uid(), kind: 'photo', mime: 'image/jpeg', blob, takenAt: taken ? taken.getTime() : Date.now(), originalName: f.name, ...(species ? { species } : {}) });
-    // A new entry built from an older gallery photo takes that photo's time and place.
     if (species) continue; // ID photos never move the entry's time or place
-    if (editor.isNew && taken && Math.abs(Date.now() - taken) > 10 * 60e3 && !editor.timeFromPhoto) {
-      editor.timeFromPhoto = true; editor.entry.at = taken.getTime();
-      if (editor.carriedPlace && $('#placeInput').value === editor.carriedPlace) $('#placeInput').value = '';
-      $('#whenText').textContent = new Date(editor.entry.at).toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' }) + ' (from photo)';
-      if (exif.lat != null) { editor.entry.lat = exif.lat; editor.entry.lon = exif.lon; editor.entry.acc = null; setGPSText(); }
-    } else if (editor.entry.lat == null && exif?.lat != null) {
-      editor.entry.lat = exif.lat; editor.entry.lon = exif.lon; setGPSText();
+    const fresh = taken && Math.abs(Date.now() - taken) <= 30 * 60e3;
+    // An older gallery photo can move a NEW entry to when/where it was taken — but only if Bobby says so.
+    if (editor.isNew && taken && !fresh && !editor.timeFromPhoto && !editor.askedPhotoTime) {
+      editor.askedPhotoTime = true;
+      const when = taken.toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' });
+      if (confirm(`This photo was taken on ${when}.\n\nMove this entry to that date and time${exif.lat != null ? ' and place' : ''}?\n\nOK = use the photo's date · Cancel = keep it as now`)) {
+        editor.timeFromPhoto = true; editor.entry.at = taken.getTime(); editor.entry.tz = deviceTZ();
+        if (editor.carriedPlace && $('#placeInput').value === editor.carriedPlace) $('#placeInput').value = '';
+        if (exif.lat != null) { editor.entry.lat = exif.lat; editor.entry.lon = exif.lon; editor.entry.acc = null; setGPSText(); }
+        updateWhen();
+      }
+    } else if (fresh && editor.entry.lat == null && exif?.lat != null) {
+      editor.entry.lat = exif.lat; editor.entry.lon = exif.lon; setGPSText();   // just-taken photo: its GPS is where you are
     }
   }
   input.value = '';
