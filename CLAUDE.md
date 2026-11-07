@@ -26,5 +26,6 @@ which is how two phones (iPhone + Android) are combined.
   (camera clock must match phone; time-zone offset may need correcting), and generate a draft photography-journal layout with chosen photos.
 
 ## Where we left off
-- 2026-11-07: Phase 1 built and tested end to end in a mobile browser emulator. Next: push to GitHub repo `patagonia-journal`,
-  enable Pages, Bobby installs on both phones and does a real-world field test before 30 Nov.
+- 2026-11-07: Phase 1 built and tested end to end in a mobile browser emulator. Pushed to github.com/bjl1979/patagonia-journal
+  (public), GitHub Pages enabled from `main` / root. Live at https://bjl1979.github.io/patagonia-journal/.
+  Next: Bobby installs on iPhone + Android and does a real-world field test before 30 Nov; fix anything that comes up.
