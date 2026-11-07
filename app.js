@@ -1,5 +1,5 @@
 // Field Journal — offline travel diary. Phase 1: capture. Phase 2 (later): book builder.
-const APP_VERSION = '1.0.1';
+const APP_VERSION = '1.1.0';
 const SPECIES = [
   'Puma', 'Guanaco', 'Andean Condor', "Darwin's Rhea (Ñandú)", 'Huemul', 'Culpeo Fox',
   'South American Grey Fox', 'Patagonian Hog-nosed Skunk', 'Pichi (Armadillo)', 'Magellanic Penguin',
@@ -94,7 +94,7 @@ async function renderAll() {
   $('#dayTitle').textContent = td ? `Day ${td}` : (settings.tripStart > todayKey ? `${Math.ceil((new Date(settings.tripStart) - new Date(todayKey)) / 864e5)} days to go` : 'Field Journal');
 
   renderTimeline(entries, byEntry);
-  renderSpecies(entries);
+  renderSpecies(entries, media);
   renderBackupInfo(entries.length);
 }
 
@@ -119,14 +119,15 @@ function renderTimeline(entries, byEntry) {
       <span class="sub">${td ? U.esc(fmtDay(k)) + ' · ' : ''}${list.length} entr${list.length > 1 ? 'ies' : 'y'}${species.size ? ' · ' + species.size + ' species' : ''}</span></div>`;
     for (const e of list) {
       const m = byEntry[e.id] || [];
-      const photos = m.filter(x => x.kind === 'photo');
+      const photos = m.filter(x => x.kind === 'photo' && !x.species);
+      const idPhoto = (s) => m.find(x => x.kind === 'photo' && x.species === s);
       const audio = m.filter(x => x.kind === 'audio');
       html += `<article class="entry" data-id="${e.id}">
         <div class="when"><span>${fmtTime(e.at, e.tz)}</span>${e.place ? `<span class="place">${U.esc(e.place)}</span>` : ''}${e.lat != null ? `<span>📍${e.lat.toFixed(3)}, ${e.lon.toFixed(3)}</span>` : ''}${e.device ? `<span>· ${U.esc(e.device)}</span>` : ''}</div>
         ${e.text ? `<p class="text">${U.esc(e.text)}</p>` : ''}
         ${photos.length ? `<div class="thumbs">${photos.map(p => `<img src="${trackURL(p.blob)}" alt="" loading="lazy">`).join('')}</div>` : ''}
         ${audio.map(a => `<audio controls preload="none" src="${trackURL(a.blob)}"></audio>`).join('')}
-        ${(e.species || []).length ? `<div class="chips tags">${e.species.map(s => `<span class="chip">${U.esc(s)}</span>`).join('')}</div>` : ''}
+        ${(e.species || []).length ? `<div class="chips tags">${e.species.map(s => { const p = idPhoto(s); return `<span class="chip${p ? ' has-av' : ''}">${p ? `<img class="av" src="${trackURL(p.blob)}" alt="">` : ''}${U.esc(s)}</span>`; }).join('')}</div>` : ''}
       </article>`;
     }
   }
@@ -137,7 +138,12 @@ function renderTimeline(entries, byEntry) {
   }));
 }
 
-function renderSpecies(entries) {
+function renderSpecies(entries, media = []) {
+  const live = new Set(entries.map(e => e.id));
+  const idPhotos = {};
+  for (const m of media) if (m.kind === 'photo' && m.species && live.has(m.entryId)) (idPhotos[m.species] ||= []).push(m);
+  Object.values(idPhotos).forEach(l => l.sort((a, b) => b.takenAt - a.takenAt));
+  speciesGallery = idPhotos;
   const tally = new Map();
   for (const e of [...entries].sort((a, b) => a.at - b.at)) {
     for (const s of e.species || []) {
@@ -147,15 +153,30 @@ function renderSpecies(entries) {
     }
   }
   const el = $('#speciesList');
-  if (!tally.size) { el.innerHTML = `<div class="empty"><h2>No sightings yet</h2><p>Tag species on any entry and your life list builds itself here.</p></div>`; return; }
+  if (!tally.size) { el.innerHTML = `<div class="empty"><h2>No sightings yet</h2><p>Tag species on any entry and your life list builds itself here. Tap 📷 on a species tag to add an ID photo.</p></div>`; return; }
   el.innerHTML = `<p class="muted">${tally.size} species logged</p>` + [...tally.entries()]
     .sort((a, b) => b[1].n - a[1].n || a[0].localeCompare(b[0]))
     .map(([s, t]) => {
       const k = dayKey(t.first.at, t.first.tz), td = tripDay(k);
-      return `<div class="sp-row"><div><div class="n">${U.esc(s)}</div>
-        <div class="d">First: ${td ? 'Day ' + td : U.esc(fmtDay(k))}${t.first.place ? ' · ' + U.esc(t.first.place) : ''}</div></div>
+      const ph = idPhotos[s] || [];
+      return `<div class="sp-row" data-s="${U.esc(s)}">
+        ${ph.length ? `<img class="sp-thumb" src="${trackURL(ph[0].blob)}" alt="">` : '<span class="sp-thumb none">🐾</span>'}
+        <div class="sp-info"><div class="n">${U.esc(s)}</div>
+        <div class="d">First: ${td ? 'Day ' + td : U.esc(fmtDay(k))}${t.first.place ? ' · ' + U.esc(t.first.place) : ''}${ph.length ? ` · ${ph.length} ID photo${ph.length > 1 ? 's' : ''}` : ''}</div></div>
         <span class="sp-count">${t.n}</span></div>`;
     }).join('');
+  el.querySelectorAll('.sp-row').forEach(r => r.addEventListener('click', () => openGallery(r.dataset.s)));
+}
+
+let speciesGallery = {};
+function openGallery(species) {
+  const list = speciesGallery[species] || [];
+  if (!list.length) { toast('No ID photos yet — open an entry and tap 📷 on this species'); return; }
+  const v = $('#viewer');
+  v.innerHTML = `<div class="viewer-head"><strong>${U.esc(species)}</strong><button class="link" id="viewerClose">Close</button></div>
+    <div class="viewer-grid">${list.map(m => `<figure><img src="${trackURL(m.blob)}" alt=""><figcaption>${new Date(m.takenAt).toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' })}</figcaption></figure>`).join('')}</div>`;
+  v.hidden = false; document.documentElement.classList.add('sheet-open');
+  $('#viewerClose').addEventListener('click', () => { v.hidden = true; v.innerHTML = ''; document.documentElement.classList.remove('sheet-open'); });
 }
 
 function renderBackupInfo(count) {
@@ -180,6 +201,7 @@ function wireEditor() {
   $('#deleteBtn').addEventListener('click', deleteEntry);
   $('#cameraInput').addEventListener('change', (e) => addPhotos(e.target.files, e.target));
   $('#galleryInput').addEventListener('change', (e) => addPhotos(e.target.files, e.target));
+  $('#speciesPhotoInput').addEventListener('change', (e) => { if (editor?.photoForSpecies) addPhotos(e.target.files, e.target, editor.photoForSpecies); });
   $('#recBtn').addEventListener('click', toggleRecord);
   $('#addSpeciesBtn').addEventListener('click', () => addSpecies($('#speciesInput').value));
   $('#speciesInput').addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); addSpecies(e.target.value); } });
@@ -241,13 +263,19 @@ function locate() {
   }, { enableHighAccuracy: true, timeout: 25000, maximumAge: 60000 });
 }
 
-async function addPhotos(files, input) {
+async function addPhotos(files, input, species = null) {
+  if (species) {
+    // one ID photo per species per entry: replace any earlier one
+    for (const m of liveMedia().filter(m => m.species === species)) removeMedia(m.id, true);
+    files = [...files].slice(0, 1);
+  }
   for (const f of files) {
     const exif = await U.readExif(f);
     const blob = await U.resizeImage(f);
     const taken = exif?.taken ? U.exifToDate(exif.taken) : null;
-    editor.added.push({ id: U.uid(), kind: 'photo', mime: 'image/jpeg', blob, takenAt: taken ? taken.getTime() : Date.now(), originalName: f.name });
+    editor.added.push({ id: U.uid(), kind: 'photo', mime: 'image/jpeg', blob, takenAt: taken ? taken.getTime() : Date.now(), originalName: f.name, ...(species ? { species } : {}) });
     // A new entry built from an older gallery photo takes that photo's time and place.
+    if (species) continue; // ID photos never move the entry's time or place
     if (editor.isNew && taken && Math.abs(Date.now() - taken) > 10 * 60e3 && !editor.timeFromPhoto) {
       editor.timeFromPhoto = true; editor.entry.at = taken.getTime();
       if (editor.carriedPlace && $('#placeInput').value === editor.carriedPlace) $('#placeInput').value = '';
@@ -259,23 +287,26 @@ async function addPhotos(files, input) {
   }
   input.value = '';
   renderEditorMedia();
+  if (species) { renderChips(); toast(`ID photo added for ${species}`); }
 }
+
+const liveMedia = () => [...editor.existing.filter(m => !editor.removed.has(m.id)), ...editor.added];
 
 function renderEditorMedia() {
   editor.editorURLs.forEach(URL.revokeObjectURL); editor.editorURLs = [];
   const u = (b) => { const x = URL.createObjectURL(b); editor.editorURLs.push(x); return x; };
-  const all = [...editor.existing.filter(m => !editor.removed.has(m.id)), ...editor.added];
-  $('#photoStrip').innerHTML = all.filter(m => m.kind === 'photo')
+  const all = liveMedia();
+  $('#photoStrip').innerHTML = all.filter(m => m.kind === 'photo' && !m.species)
     .map(m => `<div class="ph"><img src="${u(m.blob)}" alt=""><button class="rm" data-id="${m.id}" aria-label="Remove photo">✕</button></div>`).join('');
   $('#audioList').innerHTML = all.filter(m => m.kind === 'audio')
     .map(m => `<div class="aud"><audio controls src="${u(m.blob)}"></audio><button class="rm" data-id="${m.id}" aria-label="Remove recording">✕</button></div>`).join('');
   $$('#photoStrip .rm, #audioList .rm').forEach(b => b.addEventListener('click', () => removeMedia(b.dataset.id)));
 }
 
-function removeMedia(id) {
+function removeMedia(id, quiet) {
   const i = editor.added.findIndex(m => m.id === id);
   if (i >= 0) editor.added.splice(i, 1); else editor.removed.add(id);
-  renderEditorMedia();
+  if (!quiet) renderEditorMedia();
 }
 
 async function toggleRecord() {
@@ -317,8 +348,21 @@ function addSpecies(name) {
 }
 
 async function renderChips() {
-  $('#speciesChips').innerHTML = editor.entry.species.map((s, i) => `<button class="chip" data-i="${i}">${U.esc(s)}<span class="x">✕</span></button>`).join('');
-  $$('#speciesChips .chip').forEach(b => b.addEventListener('click', () => { editor.entry.species.splice(+b.dataset.i, 1); renderChips(); }));
+  const ed = editor;
+  $('#speciesChips').innerHTML = ed.entry.species.map((s, i) => {
+    const p = liveMedia().find(m => m.species === s);
+    const src = p ? URL.createObjectURL(p.blob) : null;
+    if (src) ed.editorURLs.push(src);
+    return `<span class="sp-chip"><button class="sp-cam${p ? ' has' : ''}" data-s="${U.esc(s)}" aria-label="ID photo for ${U.esc(s)}">${p ? `<img src="${src}" alt="">` : '📷'}</button>
+      <span class="sp-name">${U.esc(s)}</span><button class="sp-x" data-i="${i}" aria-label="Remove ${U.esc(s)}">✕</button></span>`;
+  }).join('');
+  $$('#speciesChips .sp-x').forEach(b => b.addEventListener('click', () => {
+    const name = ed.entry.species[+b.dataset.i];
+    for (const m of liveMedia().filter(m => m.species === name)) removeMedia(m.id, true);
+    ed.entry.species.splice(+b.dataset.i, 1); renderChips();
+  }));
+  $$('#speciesChips .sp-cam').forEach(b => b.addEventListener('click', () => { ed.photoForSpecies = b.dataset.s; $('#speciesPhotoInput').click(); }));
+  $('#speciesHint').hidden = !ed.entry.species.length;
   // quick picks: your own most-used species first, then Patagonia favourites
   const counts = {};
   (await DB.all('entries')).forEach(e => (e.species || []).forEach(s => counts[s] = (counts[s] || 0) + 1));
@@ -368,8 +412,8 @@ function mediaFileName(m, entry) {
   const tz = entry?.tz || deviceTZ();
   const d = new Date(m.takenAt || entry?.at || Date.now());
   const stamp = dayKey(d, tz) + '_' + fmtTime(d, tz).replace(/\D/g, '').padStart(4, '0');
-  const tag = U.slug((entry?.species || [])[0] || entry?.place || '');
-  return `media/${stamp}${tag ? '_' + tag : ''}_${m.kind}_${m.id.slice(0, 8)}.${EXT[m.mime.split(';')[0]] || 'bin'}`;
+  const tag = U.slug(m.species || (entry?.species || [])[0] || entry?.place || '');
+  return `media/${stamp}${tag ? '_' + tag : ''}_${m.species ? 'id' : m.kind}_${m.id.slice(0, 8)}.${EXT[m.mime.split(';')[0]] || 'bin'}`;
 }
 
 async function exportBackup() {

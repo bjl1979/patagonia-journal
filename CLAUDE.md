@@ -12,7 +12,7 @@ Long-term goal: turn the journal into a photography book.
 
 ## Data model
 - Entry: id, at (epoch ms), tz, offsetMin, device, text, species[], place, lat/lon/acc/alt, created, updated.
-- Media: id, entryId, kind (photo|audio), mime, blob, takenAt, durationSec, originalName.
+- Media: id, entryId, kind (photo|audio), mime, blob, takenAt, durationSec, originalName, species (set = ID photo for that species tag; one per species per entry; never moves the entry's time).
 - Photos are resized to max 2048px JPEG on capture. Gallery photos use their EXIF time and GPS.
 
 ## Backup format (important for Phase 2)
@@ -31,3 +31,5 @@ which is how two phones (iPhone + Android) are combined.
   Next: Bobby installs on iPhone + Android and does a real-world field test before 30 Nov; fix anything that comes up.
 - 2026-11-07 (v1.0.1): iPhone field-test fix — editor Save button was off screen. Editor is now a full-screen page with notch padding,
   plus a second Save at the bottom. Service worker switched to network-first so updates reach phones on next open.
+- 2026-11-07 (v1.1.0): species ID photos — 📷 on each species tag in the editor, avatars on timeline chips, thumbnails + per-species gallery on Species tab.
+  Next: auto sync via Supabase (Bobby creating the project) + cloud copy of all media + "Free up space"; OneDrive stays the archive via Save backup.

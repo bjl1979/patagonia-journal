@@ -97,6 +97,8 @@
 
       <label class="field">Species seen</label>
       <div class="chips" id="speciesChips"></div>
+      <p class="muted small" id="speciesHint" hidden>Tap 📷 on a species to add its ID photo.</p>
+      <input type="file" id="speciesPhotoInput" accept="image/*" hidden>
       <div class="row">
         <input id="speciesInput" list="speciesSuggest" placeholder="Add species… e.g. Puma">
         <button class="btn small" id="addSpeciesBtn">Add</button>
@@ -113,6 +115,7 @@
     </div>
   </div>
 
+  <div class="viewer" id="viewer" hidden></div>
   <div class="toast" id="toast" hidden></div>
 
   <script src="db.js"></script>
