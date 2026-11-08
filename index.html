@@ -21,7 +21,10 @@
       <span class="eyebrow" id="tripLine">Patagonia · Field Journal</span>
       <h1 id="dayTitle">Field Journal</h1>
     </div>
-    <span class="net" id="netBadge" title="Connection">●</span>
+    <div class="top-right">
+      <span class="net" id="netBadge" title="Connection">●</span>
+      <button class="gear" id="gearBtn" aria-label="Settings and backup">⚙︎</button>
+    </div>
   </header>
 
   <div class="install-bar" id="installBar" hidden>
@@ -34,8 +37,8 @@
     <button class="tab active" data-view="timeline">Journal</button>
     <button class="tab" data-view="calendar">Calendar</button>
     <button class="tab" data-view="map">Map</button>
+    <button class="tab" data-view="weather">Weather</button>
     <button class="tab" data-view="species">Species</button>
-    <button class="tab" data-view="settings">Backup</button>
   </nav>
 
   <main>
@@ -57,6 +60,9 @@
       <div class="map-key" id="mapKey"></div>
       <div class="map-wrap"><div id="map"></div><div class="map-empty" id="mapEmpty" hidden>No locations yet. Entries saved with GPS appear here as your route.</div></div>
       <p class="muted small" id="mapNote">Route joins your entries in time order. Map areas you've viewed online stay available offline.</p>
+    </section>
+    <section id="view-weather" class="view">
+      <div id="weather"></div>
     </section>
     <section id="view-species" class="view">
       <div id="speciesList"></div>
@@ -202,6 +208,7 @@
   <script src="db.js"></script>
   <script src="utils.js"></script>
   <script src="sync.js"></script>
+  <script src="weather.js"></script>
   <script src="app.js"></script>
 </body>
 </html>

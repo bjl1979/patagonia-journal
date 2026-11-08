@@ -344,3 +344,61 @@ img[src=""] { visibility: hidden; }
 .install-bar span { flex: 1; }
 .install-bar .btn.primary { background: #fff; color: #14211f; }
 .install-bar .link { color: #fff; font-size: 16px; }
+
+/* header gear */
+.top-right { display: flex; align-items: center; gap: 10px; }
+.gear { background: none; border: 0; color: #cfd8d4; font-size: 22px; padding: 4px 2px 2px; line-height: 1; }
+.gear.on { color: var(--warm); }
+/* weather */
+.wx-banner { background: #fbefe2; color: #8a4f1c; border-radius: 12px; padding: 9px 12px; font-size: 13px; margin: 4px 0 10px; font-weight: 600; }
+.wx-banner .link { color: #8a4f1c; text-decoration: underline; padding: 0; font-weight: 700; }
+.wx-hero { background: linear-gradient(160deg, #2c5f73, #14211f 75%); color: #eef1ec; border-radius: 18px; padding: 16px; margin: 4px 0 12px; position: relative; }
+.wx-hero .loc { font-size: 13px; opacity: .85; padding-right: 110px; }
+.wx-hero .loc b { font-size: 17px; display: block; font-family: Georgia, serif; }
+.wx-hero .upd { position: absolute; top: 14px; right: 14px; font-size: 11px; background: rgba(255,255,255,.14); padding: 3px 8px; border-radius: 999px; }
+.wx-hero .big { display: flex; align-items: center; gap: 12px; margin: 8px 0 4px; }
+.wx-hero .t { font: 600 60px/1 Georgia, serif; }
+.wx-hero .ic { font-size: 42px; }
+.wx-hero .cond { font-size: 15px; }
+.wx-hero .feels { font-size: 13px; opacity: .78; }
+.wx-hero .wind { margin-top: 12px; background: rgba(255,255,255,.1); border-radius: 12px; padding: 10px 12px; display: flex; align-items: center; gap: 12px; }
+.wx-hero .arrow { font-size: 24px; display: inline-block; }
+.wx-hero .wind b { font: 600 20px Georgia, serif; color: #e0a062; }
+.wx-hero .wind .s { font-size: 12px; opacity: .85; }
+.wx-hero .bar { height: 6px; border-radius: 3px; background: linear-gradient(90deg, #7fd18b, #e0a062 55%, #e05a4a); margin-top: 6px; position: relative; }
+.wx-hero .bar i { position: absolute; top: -4px; width: 4px; height: 14px; background: #fff; border-radius: 2px; }
+.wx-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin: 0 0 12px; }
+.wx-grid .mini { background: var(--surface); border-radius: 14px; box-shadow: var(--shadow); padding: 9px 4px; text-align: center; font-size: 11px; color: var(--muted); }
+.wx-grid .mini b { display: block; font: 600 16px Georgia, serif; color: var(--ink); margin-top: 2px; }
+.wx-card { background: var(--surface); border-radius: 16px; box-shadow: var(--shadow); padding: 12px 14px; margin-bottom: 14px; }
+.wx-sect { font: 600 12px -apple-system, sans-serif; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); margin: 0 0 8px; }
+.sunrow { display: flex; justify-content: space-between; font-size: 13px; }
+.sunrow b { display: block; font: 600 17px Georgia, serif; }
+.golden { margin-top: 10px; font-size: 13px; background: #fbefe2; color: #8a4f1c; border-radius: 10px; padding: 7px 10px; }
+.wx-hours { display: flex; gap: 8px; overflow-x: auto; margin: 0 -16px 14px; padding: 2px 16px 6px; scrollbar-width: none; }
+.wx-hours::-webkit-scrollbar { display: none; }
+.wx-hours .hr { flex: none; width: 58px; background: var(--surface); border-radius: 14px; box-shadow: var(--shadow); text-align: center; padding: 8px 0; font-size: 11px; color: var(--muted); }
+.wx-hours .e { font-size: 20px; display: block; margin: 3px 0; }
+.wx-hours b { font: 600 15px Georgia, serif; color: var(--ink); display: block; }
+.wx-hours .w { color: var(--warm); font-weight: 700; }
+.wx-days { background: var(--surface); border-radius: 16px; box-shadow: var(--shadow); padding: 2px 12px; margin-bottom: 14px; }
+.wx-days .dr { display: flex; align-items: center; gap: 10px; padding: 9px 0; border-bottom: 1px solid var(--line); font-size: 14px; }
+.wx-days .dr:last-child { border: 0; }
+.wx-days .n { width: 52px; font-weight: 600; }
+.wx-days .e { font-size: 20px; width: 26px; }
+.wx-days .rng { flex: 1; display: flex; align-items: center; gap: 6px; color: var(--muted); font-size: 13px; }
+.wx-days .track { flex: 1; height: 5px; border-radius: 3px; background: var(--chip); position: relative; }
+.wx-days .track .b { position: absolute; top: 0; bottom: 0; border-radius: 3px; background: linear-gradient(90deg, #8fc3d6, #e0a062); }
+.wx-days .wd { width: 58px; text-align: right; color: var(--warm); font-weight: 700; font-size: 12px; }
+.wx-trip { background: var(--surface); border-radius: 16px; box-shadow: var(--shadow); padding: 2px 12px; }
+.wx-trip .tr { display: flex; gap: 10px; align-items: center; padding: 10px 0; border: 0; border-bottom: 1px solid var(--line); background: none; width: 100%; text-align: left; font: inherit; color: var(--ink); }
+.wx-trip .tr:last-child { border-bottom: 0; }
+.wx-trip .d { width: 46px; font: 700 13px -apple-system, sans-serif; color: var(--accent); }
+.wx-trip .d small { display: block; color: var(--muted); font-weight: 400; font-size: 11px; }
+.wx-trip .p { flex: 1; font-size: 13px; }
+.wx-trip .p b { display: block; font-size: 14px; }
+.wx-trip .v b { font: 600 15px Georgia, serif; }
+.wx-note { font-size: 12px; color: var(--muted); text-align: center; margin: 14px 4px; }
+.wx-line { opacity: .9; }
+.v-wx { font-size: 13px; margin-top: 6px; color: var(--ink); }
+.v-wx b { font-family: Georgia, serif; font-size: 15px; }

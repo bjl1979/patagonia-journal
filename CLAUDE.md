@@ -10,7 +10,8 @@ Long-term goal: turn the journal into a photography book.
 - `sw.js` caches the app so it opens with no signal. **Bump `CACHE` in sw.js and `APP_VERSION` in app.js on every change.**
 - Files: `index.html` (layout), `styles.css`, `app.js` (all app logic), `db.js` (storage), `utils.js` (EXIF reader, photo resize, zip writer/reader),
   `sync.js` (Supabase cloud sync, plain fetch), `config.js` (Supabase URL + anon/publishable key — public by design; never the service_role key),
-  `setup.sql` (tables, RLS, private `journal` storage bucket — paste into Supabase SQL Editor).
+  `setup.sql` (tables, RLS, private `journal` storage bucket — paste into Supabase SQL Editor),
+  `weather.js` (Open-Meteo forecast + per-entry/day weather; golden hour from a solar-elevation calc).
 
 ## Cloud sync (v1.2.0)
 - Offline-first. Every local change sets `dirty: true`; deletes are tombstones (`deleted: true`, media blob dropped) so they sync.
@@ -57,3 +58,7 @@ which is how two phones (iPhone + Android) are combined.
 - 2026-11-08 (v1.5.1): Android showed Chrome's 'You're offline' page. Could not reproduce (works offline in emulated GitHub Pages incl. after update); only failing case found = opening …/patagonia-journal without trailing slash (outside SW scope). Hardened sw.js: navigation handled separately (no RequestInit on navigate requests), fresh precache with cache:'reload', core files atomic, ignoreVary, redirected responses cleaned, old caches deleted only when new one complete, 3 s timeout + 60 s 'network dead' fast path, friendly fallback page. Backup tab shows 'Ready to use offline' check; storage.persist() at boot.
 - 2026-11-08 (v1.5.2–1.5.3): Android 'can't install' after uninstalling old app; Chrome installability check passes (no errors). Added manifest id + maskable icon, then an Install bar (beforeinstallprompt → prompt()) under the header and an Install card in Backup; hidden when running installed; iOS shows Add to Home Screen steps.
 - 2026-11-08: Android install works via Install bar; installed app appears in app drawer as "Journal" (short_name). Offline confirmed working on Bobby's phones.
+- 2026-11-08 (v1.6.0): Weather tab (Backup moved to ⚙ gear in header; tabs: Journal, Calendar, Map, Weather, Species). Open-Meteo, no key, timeformat=unixtime, timezone=auto.
+  Forecast at GPS (fallback: last entry) saved in settings `wxForecast` (16 days) → offline uses saved hourly for "now"; expired forecast hides forecast sections.
+  Per-entry/day weather fetched per day+0.1° cell into settings `wxDays` (local only, NOT synced — avoids overwriting edits from the other phone); shown on day card,
+  entry view, Trip weather list, and exported in backup journal.json as entry.weather. Workspace can't reach open-meteo; tested with wxmock.mjs.

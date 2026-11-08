@@ -1,5 +1,5 @@
 // Field Journal — offline travel diary. Phase 1: capture. Phase 2 (later): book builder.
-const APP_VERSION = '1.5.3';
+const APP_VERSION = '1.6.0';
 const SPECIES = [
   'Puma', 'Guanaco', 'Andean Condor', "Darwin's Rhea (Ñandú)", 'Huemul', 'Culpeo Fox',
   'South American Grey Fox', 'Patagonian Hog-nosed Skunk', 'Pichi (Armadillo)', 'Magellanic Penguin',
@@ -85,8 +85,13 @@ async function boot() {
   setTimeout(checkOffline, 1500); setTimeout(checkOffline, 8000);
   wireCloud();
   wireInstall();
+  await WX.loadDays();
   await renderAll();
-  Sync.init(() => renderAll());
+  Sync.init(() => { renderAll(); setTimeout(() => updateWeather(), 1500); });
+  $('#gearBtn').addEventListener('click', () => showView('settings'));
+  setTimeout(() => updateWeather(), 3000);
+  addEventListener('online', () => setTimeout(() => updateWeather(), 2000));
+  setInterval(() => { if (document.visibilityState === 'visible') updateWeather(); }, 30 * 60000);
 }
 
 function updateNet() { renderSyncState(Sync.state); }
@@ -116,8 +121,10 @@ function renderSyncState(st) {
 function showView(v) {
   $$('.tab').forEach(t => t.classList.toggle('active', t.dataset.view === v));
   $$('.view').forEach(s => s.classList.toggle('active', s.id === 'view-' + v));
-  $('#captureBar').style.display = ['settings', 'calendar', 'map'].includes(v) ? 'none' : '';
+  $('#gearBtn').classList.toggle('on', v === 'settings');
+  $('#captureBar').style.display = ['settings', 'calendar', 'map', 'weather'].includes(v) ? 'none' : '';
   if (v === 'map') showMap();
+  if (v === 'weather') { renderWeather(); updateWeather({ force: false }); }
   if (v === 'settings') renderStorage();
 }
 
@@ -224,6 +231,7 @@ function renderTimeline(entries, byEntry) {
   let html = `<div class="daycard">
     <h2>${lbl ? lbl + ' · ' : ''}${U.esc(fmtDay(k))}${isToday ? ' <span class="todaytag">today</span>' : ''}</h2>
     ${route.length ? `<div class="sub">${route.map(U.esc).join(' → ')}</div>` : ''}
+    ${(() => { const w = WX.forDay(list, entryDay); return w ? `<div class="sub wx-line">${WX.icon(w.code)} ${U.esc(WX.label(w.code))} · ${w.min}°–${w.max}° · gusts ${w.gust} km/h</div>` : ''; })()}
     <div class="stats"><div><b>${list.length}</b>entr${list.length === 1 ? 'y' : 'ies'}</div><div><b>${species.size}</b>species</div>
       <div><b>${media.filter(m => m.kind === 'photo').length}</b>photos</div><div><b>${media.filter(m => m.kind === 'audio').length}</b>voice</div></div>
   </div>`;
@@ -341,6 +349,107 @@ function renderMap(fit = false) {
     ? `${what} · ${stops} stop${stops === 1 ? '' : 's'} · ${km < 10 ? km.toFixed(1) : Math.round(km)} km between entries${navigator.onLine ? '' : ' · offline'}`
     : '';
   if (fit && bounds.length) map.fitBounds(bounds, { padding: [36, 36], maxZoom: 14 });
+}
+
+// ---------------- weather ----------------
+let wxUpdating = false;
+async function updateWeather({ force = false } = {}) {
+  if (wxUpdating || !navigator.onLine) return;
+  wxUpdating = true;
+  try {
+    const entries = lastData.entries || [];
+    const [gotForecast, filled] = await Promise.all([
+      WX.refreshForecast({ force, entries }).catch(() => false),
+      WX.fillEntries(entries, entryDay).catch(() => 0),
+    ]);
+    if (filled) { renderTimeline(lastData.entries, lastData.byEntry); }
+    if (gotForecast || filled) renderWeather();
+  } finally { wxUpdating = false; }
+}
+
+async function renderWeather() {
+  const el = $('#weather');
+  if (!$('#view-weather').classList.contains('active') && el.innerHTML) return;
+  const fc = await DB.setting('wxForecast', null);
+  if (!fc) {
+    el.innerHTML = `<div class="empty"><h2>No weather saved yet</h2><p>${navigator.onLine ? 'Getting the forecast for where you are…' : 'Open this tab once with signal. The forecast is then saved for the days ahead, so it works offline too.'}</p></div>`;
+    return;
+  }
+  const d = fc.data, tz = d.timezone, now = Date.now() / 1000;
+  const fmt = (s, o) => new Date(s * 1000).toLocaleString([], { timeZone: tz, ...o });
+  const hm = (s) => fmt(s, { hour: '2-digit', minute: '2-digit', hourCycle: 'h23' });
+  const H = d.hourly, D = d.daily;
+  let h = 0; while (h + 1 < H.time.length && H.time[h + 1] <= now) h++;
+  let di = 0; while (di + 1 < D.time.length && D.time[di + 1] <= now) di++;
+  const ran = H.time[H.time.length - 1] < now;
+  const age = Date.now() - fc.fetchedAt, stale = age > 90 * 60000;
+  // "now": live reading if recent, otherwise the saved hourly forecast for this hour
+  const c = !stale && d.current ? d.current : {
+    temperature_2m: H.temperature_2m[h], apparent_temperature: H.apparent_temperature[h], relative_humidity_2m: H.relative_humidity_2m[h],
+    weather_code: H.weather_code[h], cloud_cover: H.cloud_cover[h], wind_speed_10m: H.wind_speed_10m[h], wind_direction_10m: H.wind_direction_10m[h],
+    wind_gusts_10m: H.wind_gusts_10m[h], precipitation_probability: H.precipitation_probability[h], uv_index: H.uv_index?.[h], is_day: H.is_day[h],
+  };
+  const R = Math.round, gust = R(c.wind_gusts_10m), wind = R(c.wind_speed_10m);
+  const windWord = gust >= 90 ? 'Dangerous gusts' : gust >= 70 ? 'Very windy' : gust >= 45 ? 'Windy' : gust >= 25 ? 'Breezy' : 'Calm';
+  const gold = WX.goldenHours(D.sunrise[di], D.sunset[di], fc.lat, fc.lon);
+  const daylight = D.daylight_duration?.[di];
+  const place = fc.place || `${fc.lat.toFixed(2)}, ${fc.lon.toFixed(2)}`;
+  const banner = !navigator.onLine
+    ? `<div class="wx-banner">⚠︎ Offline — showing forecast saved ${ago(fc.fetchedAt)}</div>`
+    : stale ? `<div class="wx-banner">Forecast saved ${ago(fc.fetchedAt)} · <button class="link" id="wxRefresh">Update now</button></div>` : '';
+  const hours = [];
+  for (let i = h; i < Math.min(H.time.length, h + 12); i++) hours.push(i);
+  const daysAhead = [];
+  for (let i = di; i < Math.min(D.time.length, di + 5); i++) daysAhead.push(i);
+  // trip weather: each day you logged entries, the weather where you were
+  const groups = groupByDay(lastData.entries || []);
+  const tripRows = [...groups.keys()].sort().filter(k => k <= todayKey()).slice(-14).map(k => {
+    const list = groups.get(k), w = WX.forDay(list, entryDay);
+    const places = [...new Set(list.map(e => e.place).filter(Boolean))];
+    return { k, w, place: places[0] || '', more: places.length > 1 ? ` +${places.length - 1}` : '' };
+  }).filter(r => r.w);
+  const tmin = Math.min(...daysAhead.map(i => D.temperature_2m_min[i])), tmax = Math.max(...daysAhead.map(i => D.temperature_2m_max[i]));
+  const span = Math.max(1, tmax - tmin);
+
+  el.innerHTML = `${ran ? `<div class="wx-banner">The saved forecast has run out — open this tab with signal to update it.${navigator.onLine ? ' <button class="link" id="wxRefresh">Update now</button>' : ''}</div>` : banner}
+    ${ran ? '' : `<div class="wx-hero">
+      ${!stale && navigator.onLine ? `<span class="upd">updated ${hm(fc.fetchedAt / 1000)}</span>` : ''}
+      <div class="loc">${fc.place ? 'Where you are now' : 'Your location'}<b>${U.esc(place)}</b></div>
+      <div class="big"><span class="t">${R(c.temperature_2m)}°</span><span class="ic">${WX.icon(c.weather_code, c.is_day)}</span>
+        <div><div class="cond">${U.esc(WX.label(c.weather_code))}</div><div class="feels">Feels like ${R(c.apparent_temperature)}° · High ${R(D.temperature_2m_max[di])}° Low ${R(D.temperature_2m_min[di])}°</div></div></div>
+      <div class="wind"><span class="arrow" style="transform:rotate(${(c.wind_direction_10m + 90) % 360}deg)">➜</span>
+        <div style="flex:1"><b>${wind} km/h</b> <span class="s">from ${WX.compass(c.wind_direction_10m)} · gusts ${gust} km/h · ${windWord}</span>
+        <div class="bar"><i style="left:${Math.min(97, gust / 120 * 100)}%"></i></div></div></div>
+    </div>
+    <div class="wx-grid">
+      <div class="mini">Rain<b>${c.precipitation_probability ?? D.precipitation_probability_max?.[di] ?? '–'}%</b></div>
+      <div class="mini">Humidity<b>${R(c.relative_humidity_2m)}%</b></div>
+      <div class="mini">UV<b>${c.uv_index != null ? R(c.uv_index) : R(D.uv_index_max?.[di] ?? 0)}</b></div>
+      <div class="mini">Cloud<b>${R(c.cloud_cover)}%</b></div>
+    </div>
+    <div class="wx-card"><h3 class="wx-sect">Light for photography</h3>
+      <div class="sunrow"><div>Sunrise<b>${hm(D.sunrise[di])}</b></div><div>Sunset<b>${hm(D.sunset[di])}</b></div>
+        ${daylight ? `<div>Daylight<b>${Math.floor(daylight / 3600)} h ${String(R(daylight % 3600 / 60)).padStart(2, '0')}</b></div>` : ''}</div>
+      ${gold ? `<div class="golden">🌅 Golden hour ${hm(gold.morning[0] / 1000)}–${hm(gold.morning[1] / 1000)} &nbsp;·&nbsp; ${hm(gold.evening[0] / 1000)}–${hm(gold.evening[1] / 1000)}</div>` : ''}
+    </div>
+    <h3 class="wx-sect">Next hours</h3>
+    <div class="wx-hours">${hours.map((i, n) => `<div class="hr">${n === 0 ? 'Now' : fmt(H.time[i], { hour: 'numeric' })}<span class="e">${WX.icon(H.weather_code[i], H.is_day[i])}</span><b>${R(H.temperature_2m[i])}°</b><span class="w" title="gusts">💨${R(H.wind_gusts_10m[i])}</span></div>`).join('')}</div>
+    <h3 class="wx-sect">Next ${daysAhead.length} days · ${U.esc(place)}</h3>
+    <div class="wx-days">${daysAhead.map((i, n) => {
+      const lo = D.temperature_2m_min[i], hi = D.temperature_2m_max[i];
+      return `<div class="dr"><span class="n">${n === 0 ? 'Today' : fmt(D.time[i] + 43200, { weekday: 'short' })}</span><span class="e">${WX.icon(D.weather_code[i])}</span>
+        <span class="rng">${R(lo)}°<span class="track"><span class="b" style="left:${(lo - tmin) / span * 100}%;right:${(tmax - hi) / span * 100}%"></span></span>${R(hi)}°</span>
+        <span class="wd">💨 ${R(D.wind_gusts_10m_max[i])}</span></div>`;
+    }).join('')}</div>`}
+    <h3 class="wx-sect">Your trip weather · logged automatically</h3>
+    ${tripRows.length ? `<div class="wx-trip">${tripRows.reverse().map(r => `<button class="tr" data-k="${r.k}">
+        <span class="d">${U.esc((dayLabel(r.k) || '').replace('Day ', 'D') || new Date(r.k + 'T12:00:00').getDate())}<small>${U.esc(new Date(r.k + 'T12:00:00').toLocaleDateString([], { day: 'numeric', month: 'short' }))}</small></span>
+        <span class="p"><b>${U.esc(r.place || 'Unnamed place')}${r.more}</b>${WX.icon(r.w.code)} ${U.esc(WX.label(r.w.code))} · 💨 gusts ${r.w.gust}</span>
+        <span class="v"><b>${r.w.min}°–${r.w.max}°</b></span></button>`).join('')}</div>`
+      : '<p class="muted small">Each day you log entries with GPS, the weather where you were appears here (added when you have signal).</p>'}
+    <p class="wx-note">Forecast from Open-Meteo, a weather model for this spot — mountain winds can be stronger locally. Updates when you have signal; saved for offline use.</p>`;
+  $('#wxRefresh')?.addEventListener('click', () => { toast('Updating weather…'); updateWeather({ force: true }); });
+  $$('#weather .tr').forEach(b => b.addEventListener('click', () => { selectDay(b.dataset.k); showView('timeline'); }));
 }
 
 // ---------------- calendar ----------------
@@ -503,6 +612,9 @@ async function openView(id) {
       <div class="v-when">${U.esc(fmtDay(k))} · ${fmtTime(e.at, e.tz)}</div>
       ${e.place ? `<div class="v-place">${U.esc(e.place)}</div>` : ''}
       ${e.lat != null ? `<div class="v-gps">📍 ${e.lat.toFixed(4)}, ${e.lon.toFixed(4)}${e.acc ? ` ±${Math.round(e.acc)} m` : ''}</div>` : ''}
+      ${(() => { const w = WX.forEntry(e, entryDay); return w
+        ? `<div class="v-wx">${WX.icon(w.code, w.isDay)} <b>${w.temp}°</b> ${U.esc(WX.label(w.code))} · feels ${w.feels}° · wind ${w.wind} km/h ${w.dir}, gusts ${w.gust}</div>`
+        : e.lat != null && e.at < Date.now() + 864e5 ? '<div class="v-wx muted">Weather will be added next time you have signal</div>' : ''; })()}
     </div>
     ${e.text ? `<p class="v-text">${U.esc(e.text)}</p>` : ''}
     ${audio.map((a, i) => a.blob
@@ -944,7 +1056,7 @@ async function exportBackup() {
     const journal = {
       format: 'field-journal', version: 1, appVersion: APP_VERSION, exportedAt: new Date().toISOString(),
       device: settings.deviceName, trip: { name: settings.tripName, start: settings.tripStart },
-      entries: entries.map(e => ({ ...e, localTime: new Date(e.at).toLocaleString('sv-SE', { timeZone: e.tz }), tripDay: tripDay(dayKey(e.at, e.tz)) })),
+      entries: entries.map(e => ({ ...e, localTime: new Date(e.at).toLocaleString('sv-SE', { timeZone: e.tz }), tripDay: tripDay(dayKey(e.at, e.tz)), weather: WX.forEntry(e, entryDay) || undefined })),
       media: mediaIndex,
     };
     const enc = new TextEncoder();

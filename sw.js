@@ -1,8 +1,8 @@
 // Offline support: keep the app shell cached so it opens with no signal.
 // Bump CACHE when any app file changes so phones pick up the new version.
-const CACHE = 'field-journal-v15';
+const CACHE = 'field-journal-v16';
 const TILES = 'field-journal-tiles';
-const CORE = ['index.html', 'styles.css', 'app.js', 'db.js', 'utils.js', 'config.js', 'sync.js',
+const CORE = ['index.html', 'styles.css', 'app.js', 'db.js', 'utils.js', 'config.js', 'sync.js', 'weather.js',
   'vendor/leaflet/leaflet.js', 'vendor/leaflet/leaflet.css'];
 const EXTRA = ['manifest.webmanifest', 'vendor/leaflet/images/layers.png', 'vendor/leaflet/images/layers-2x.png',
   'icons/icon-192.png', 'icons/icon-512.png', 'icons/icon-maskable-512.png', 'icons/apple-touch-icon.png'];
