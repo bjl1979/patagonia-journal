@@ -108,6 +108,25 @@
 
   <!-- Entry editor -->
   <div class="sheet-backdrop" id="sheetBackdrop" hidden></div>
+  <!-- Entry view (read-only) -->
+  <div class="sheet" id="viewSheet" hidden role="dialog" aria-modal="true" aria-labelledby="viewTitle">
+    <div class="sheet-head">
+      <button class="link" id="viewClose">Close</button>
+      <strong id="viewTitle">Entry</strong>
+      <button class="link bold" id="viewEdit">Edit</button>
+    </div>
+    <div class="sheet-body" id="viewBody"></div>
+  </div>
+
+  <!-- Full-screen photo -->
+  <div class="lightbox" id="lightbox" hidden role="dialog" aria-label="Photo">
+    <div class="lb-top"><span id="lbCount"></span><button class="lb-close" id="lbClose" aria-label="Close">✕</button></div>
+    <div class="lb-stage" id="lbStage"><img id="lbImg" alt=""></div>
+    <button class="lb-nav prev" id="lbPrev" aria-label="Previous photo">‹</button>
+    <button class="lb-nav next" id="lbNext" aria-label="Next photo">›</button>
+    <div class="lb-cap" id="lbCap"></div>
+  </div>
+
   <div class="sheet" id="sheet" hidden role="dialog" aria-modal="true" aria-labelledby="sheetTitle">
     <div class="sheet-head">
       <button class="link" id="cancelBtn">Cancel</button>

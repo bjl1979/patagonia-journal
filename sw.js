@@ -1,6 +1,6 @@
 // Offline support: keep the app shell cached so it opens with no signal.
 // Bump CACHE when any app file changes so phones pick up the new version.
-const CACHE = 'field-journal-v11';
+const CACHE = 'field-journal-v12';
 const SHELL = [
   './', 'index.html', 'styles.css', 'app.js', 'db.js', 'utils.js', 'config.js', 'sync.js', 'manifest.webmanifest',
   'vendor/leaflet/leaflet.js', 'vendor/leaflet/leaflet.css', 'vendor/leaflet/images/layers.png', 'vendor/leaflet/images/layers-2x.png',

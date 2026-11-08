@@ -1,5 +1,5 @@
 // Field Journal — offline travel diary. Phase 1: capture. Phase 2 (later): book builder.
-const APP_VERSION = '1.4.1';
+const APP_VERSION = '1.5.0';
 const SPECIES = [
   'Puma', 'Guanaco', 'Andean Condor', "Darwin's Rhea (Ñandú)", 'Huemul', 'Culpeo Fox',
   'South American Grey Fox', 'Patagonian Hog-nosed Skunk', 'Pichi (Armadillo)', 'Magellanic Penguin',
@@ -73,6 +73,7 @@ async function boot() {
   $$('.tab').forEach(b => b.addEventListener('click', () => showView(b.dataset.view)));
   $$('.cap').forEach(b => b.addEventListener('click', () => openEditor(null, b.dataset.mode)));
   wireEditor();
+  wireViewer();
   wireBackup();
   addEventListener('online', updateNet); addEventListener('offline', updateNet);
 
@@ -241,7 +242,7 @@ function renderTimeline(entries, byEntry) {
   el.innerHTML = html;
   el.querySelectorAll('.entry').forEach(a => a.addEventListener('click', (ev) => {
     if (ev.target.closest('audio')) return;
-    openEditor(a.dataset.id);
+    openView(a.dataset.id);
   }));
 }
 
@@ -447,6 +448,108 @@ async function renderStorage() {
   const { usage, quota } = await navigator.storage.estimate();
   const persisted = navigator.storage.persisted ? await navigator.storage.persisted() : false;
   $('#storageInfo').textContent = `Using ${(usage / 1048576).toFixed(1)} MB of ~${(quota / 1073741824).toFixed(1)} GB available · ${persisted ? 'protected from auto-cleanup' : 'not yet protected from auto-cleanup'} · v${APP_VERSION}`;
+}
+
+// ---------------- entry view (read-only) ----------------
+let viewing = null;   // { id, urls: [] }
+
+async function openView(id) {
+  const e = await DB.get('entries', id);
+  if (!e || e.deleted) return;
+  const media = (await DB.mediaFor(id)).filter(m => !m.deleted);
+  closeView();
+  viewing = { id, urls: [] };
+  const u = (b) => { if (!b) return ''; const x = URL.createObjectURL(b); viewing.urls.push(x); return x; };
+  const k = entryDay(e), lbl = dayLabel(k);
+  const photos = media.filter(m => m.kind === 'photo' && !m.species).sort((a, b) => a.takenAt - b.takenAt);
+  const audio = media.filter(m => m.kind === 'audio').sort((a, b) => a.takenAt - b.takenAt);
+  const idPhoto = (s) => media.find(m => m.kind === 'photo' && m.species === s);
+  const dur = (s) => s ? `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}` : '';
+  const gallery = [...photos, ...(e.species || []).map(idPhoto).filter(Boolean)];
+  viewing.gallery = gallery.map(m => ({ m, cap: m.species ? `${m.species} · ID photo` : `${fmtTime(m.takenAt || e.at, e.tz)}${e.place ? ' · ' + e.place : ''}` }));
+
+  $('#viewTitle').textContent = lbl ? `${lbl} · ${fmtTime(e.at, e.tz)}` : fmtTime(e.at, e.tz);
+  $('#viewBody').innerHTML = `
+    ${photos.length ? `<div class="v-photos${photos.length === 1 ? ' one' : ''}">${photos.map((p, i) =>
+      `<button class="v-ph" data-g="${i}" aria-label="Open photo ${i + 1}"><img src="${u(src(p))}" alt=""></button>`).join('')}</div>
+      ${photos.length > 1 ? `<p class="v-hint">${photos.length} photos · swipe · tap to enlarge</p>` : '<p class="v-hint">Tap photo to enlarge</p>'}` : ''}
+    <div class="v-meta">
+      <div class="v-when">${U.esc(fmtDay(k))} · ${fmtTime(e.at, e.tz)}</div>
+      ${e.place ? `<div class="v-place">${U.esc(e.place)}</div>` : ''}
+      ${e.lat != null ? `<div class="v-gps">📍 ${e.lat.toFixed(4)}, ${e.lon.toFixed(4)}${e.acc ? ` ±${Math.round(e.acc)} m` : ''}</div>` : ''}
+    </div>
+    ${e.text ? `<p class="v-text">${U.esc(e.text)}</p>` : ''}
+    ${audio.map((a, i) => a.blob
+      ? `<div class="v-audio"><div class="v-audio-l">🎙 Voice note${audio.length > 1 ? ' ' + (i + 1) : ''}${a.durationSec ? ' · ' + dur(a.durationSec) : ''}</div><audio controls preload="metadata" src="${u(a.blob)}"></audio></div>`
+      : `<div class="v-audio"><div class="v-audio-l">🎙 Voice note downloading…</div></div>`).join('')}
+    ${(e.species || []).length ? `<h3 class="v-h">Species</h3><div class="v-species">${e.species.map(s => {
+      const p = idPhoto(s), gi = p ? gallery.indexOf(p) : -1;
+      return `<button class="v-sp"${gi >= 0 ? ` data-g="${gi}"` : ''}>${p ? `<img src="${u(src(p))}" alt="">` : '<span class="v-sp-none">🐾</span>'}<span>${U.esc(s)}</span></button>`;
+    }).join('')}</div>` : ''}
+    ${!e.text && !media.length && !(e.species || []).length ? '<p class="muted">This entry is empty.</p>' : ''}
+    <p class="v-foot">${e.device ? 'Logged on ' + U.esc(e.device) : ''}${e.updated && e.updated - (e.created || e.at) > 60000 ? ' · edited ' + new Date(e.updated).toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' }) : ''}</p>
+    <button class="btn wide" id="viewEdit2">✎ Edit entry</button>`;
+  $$('#viewBody [data-g]').forEach(b => b.addEventListener('click', () => openLightbox(+b.dataset.g)));
+  $('#viewEdit2').addEventListener('click', editFromView);
+  $('#viewSheet').hidden = false;
+  $('#viewSheet .sheet-body').scrollTop = 0;
+  document.documentElement.classList.add('sheet-open');
+}
+
+function closeView() {
+  if (!viewing) return;
+  $$('#viewBody audio').forEach(a => a.pause());
+  closeLightbox();
+  viewing.urls.forEach(URL.revokeObjectURL);
+  viewing = null;
+  $('#viewSheet').hidden = true; $('#viewBody').innerHTML = '';
+  document.documentElement.classList.remove('sheet-open');
+}
+
+function editFromView() {
+  const id = viewing?.id;
+  closeView();
+  if (id) openEditor(id);
+}
+
+// ---------------- full-screen photo ----------------
+let lb = null;   // { i, url }
+async function openLightbox(i) {
+  if (!viewing?.gallery?.length) return;
+  lb = { i: Math.max(0, Math.min(i, viewing.gallery.length - 1)), url: null };
+  $('#lightbox').hidden = false;
+  showLightbox();
+}
+async function showLightbox() {
+  const item = viewing.gallery[lb.i];
+  const img = $('#lbImg');
+  img.classList.remove('zoom'); $('#lbStage').scrollTo(0, 0);
+  if (lb.url) URL.revokeObjectURL(lb.url);
+  lb.url = URL.createObjectURL(src(item.m)); img.src = lb.url;
+  $('#lbCap').textContent = item.cap;
+  $('#lbCount').textContent = viewing.gallery.length > 1 ? `${lb.i + 1} / ${viewing.gallery.length}` : '';
+  $('#lbPrev').hidden = lb.i === 0; $('#lbNext').hidden = lb.i === viewing.gallery.length - 1;
+  if (!item.m.blob) {                       // freed to the cloud: fetch the full photo
+    const want = lb.i, full = await Sync.fullBlob(item.m);
+    if (lb && lb.i === want && full && full !== item.m.thumb) { URL.revokeObjectURL(lb.url); lb.url = URL.createObjectURL(full); img.src = lb.url; }
+  }
+}
+function closeLightbox() {
+  if (!lb) return;
+  if (lb.url) URL.revokeObjectURL(lb.url);
+  lb = null; $('#lightbox').hidden = true; $('#lbImg').removeAttribute('src');
+}
+function wireViewer() {
+  $('#viewClose').addEventListener('click', closeView);
+  $('#viewEdit').addEventListener('click', editFromView);
+  $('#lbClose').addEventListener('click', closeLightbox);
+  const step = (d) => { if (!lb) return; const n = lb.i + d; if (n >= 0 && n < viewing.gallery.length) { lb.i = n; showLightbox(); } };
+  $('#lbPrev').addEventListener('click', () => step(-1));
+  $('#lbNext').addEventListener('click', () => step(1));
+  $('#lbImg').addEventListener('click', () => $('#lbImg').classList.toggle('zoom'));   // tap to zoom in/out
+  let x0 = null;
+  $('#lbStage').addEventListener('touchstart', (e) => { x0 = $('#lbImg').classList.contains('zoom') ? null : e.touches[0].clientX; }, { passive: true });
+  $('#lbStage').addEventListener('touchend', (e) => { if (x0 == null) return; const dx = e.changedTouches[0].clientX - x0; x0 = null; if (Math.abs(dx) > 60) step(dx < 0 ? 1 : -1); }, { passive: true });
 }
 
 // ---------------- editor ----------------
