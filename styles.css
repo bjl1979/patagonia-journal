@@ -336,3 +336,7 @@ img[src=""] { visibility: hidden; }
 .lb-nav { position: absolute; top: 50%; transform: translateY(-50%); width: 44px; height: 64px; border: 0; background: rgba(255,255,255,.12); color: #fff; font-size: 34px; border-radius: 12px; }
 .lb-nav.prev { left: 8px; } .lb-nav.next { right: 8px; }
 .lb-cap { padding: 10px 16px calc(14px + var(--safe-b)); font-size: 14px; color: #c9d1cd; text-align: center; }
+.offline-ready { font-size: 14px; font-weight: 700; margin: 12px 0 0; padding: 10px 12px; border-radius: 12px; background: var(--chip); }
+.offline-ready.ok { color: #2e7d4f; background: #e3f2e8; }
+.offline-ready.no { color: var(--danger); background: #f8e6e4; }
+@media (prefers-color-scheme: dark) { .offline-ready.ok { background: #183325; color: #7fd18b; } .offline-ready.no { background: #3a1f1c; } }

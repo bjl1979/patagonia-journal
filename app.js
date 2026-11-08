@@ -1,5 +1,5 @@
 // Field Journal — offline travel diary. Phase 1: capture. Phase 2 (later): book builder.
-const APP_VERSION = '1.5.0';
+const APP_VERSION = '1.5.1';
 const SPECIES = [
   'Puma', 'Guanaco', 'Andean Condor', "Darwin's Rhea (Ñandú)", 'Huemul', 'Culpeo Fox',
   'South American Grey Fox', 'Patagonian Hog-nosed Skunk', 'Pichi (Armadillo)', 'Magellanic Penguin',
@@ -77,7 +77,12 @@ async function boot() {
   wireBackup();
   addEventListener('online', updateNet); addEventListener('offline', updateNet);
 
-  if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(() => {});
+  if ('serviceWorker' in navigator) {
+    navigator.serviceWorker.register('sw.js').catch(() => {});
+    navigator.serviceWorker.addEventListener('controllerchange', checkOffline);
+  }
+  if (navigator.storage?.persist) navigator.storage.persist().catch(() => {});
+  setTimeout(checkOffline, 1500); setTimeout(checkOffline, 8000);
   wireCloud();
   await renderAll();
   Sync.init(() => renderAll());
@@ -443,7 +448,27 @@ function renderBackupInfo(count) {
     (lb ? 'last backup ' + new Date(lb).toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' }) : 'no backup yet');
 }
 
+// Is this phone ready to open the app with no signal?
+let offlineReady = null;
+async function checkOffline() {
+  let ready = false;
+  try {
+    const controlled = !!navigator.serviceWorker?.controller;
+    const page = await caches.match('index.html', { ignoreSearch: true, ignoreVary: true });
+    const leaflet = await caches.match('vendor/leaflet/leaflet.js', { ignoreSearch: true, ignoreVary: true });
+    ready = controlled && !!page && !!leaflet;
+  } catch (e) { ready = false; }
+  offlineReady = ready;
+  const el = $('#offlineReady');
+  if (el) {
+    el.className = 'offline-ready ' + (ready ? 'ok' : 'no');
+    el.textContent = ready ? '✓ Ready to use offline' : '✗ Not ready for offline yet — open the app with signal, wait 10 seconds, then close and reopen it';
+  }
+  return ready;
+}
+
 async function renderStorage() {
+  checkOffline();
   if (!navigator.storage?.estimate) return;
   const { usage, quota } = await navigator.storage.estimate();
   const persisted = navigator.storage.persisted ? await navigator.storage.persisted() : false;
