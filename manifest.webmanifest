@@ -1,7 +1,7 @@
 {
   "name": "Field Journal",
   "short_name": "Journal",
-  "description": "Offline travel and wildlife diary — voice, notes, photos, time and GPS.",
+  "description": "Offline travel and wildlife diary \u2014 voice, notes, photos, time and GPS.",
   "start_url": "./",
   "scope": "./",
   "display": "standalone",
@@ -9,8 +9,24 @@
   "background_color": "#14211f",
   "theme_color": "#14211f",
   "icons": [
-    { "src": "icons/icon-192.png", "sizes": "192x192", "type": "image/png" },
-    { "src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png" },
-    { "src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
-  ]
+    {
+      "src": "icons/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "icons/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "icons/icon-maskable-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ],
+  "id": "/patagonia-journal/"
 }
