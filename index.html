@@ -24,6 +24,12 @@
     <span class="net" id="netBadge" title="Connection">●</span>
   </header>
 
+  <div class="install-bar" id="installBar" hidden>
+    <span id="installText">Install Field Journal on this phone</span>
+    <button class="btn small primary" id="installBtn">Install</button>
+    <button class="link small" id="installLater" aria-label="Hide">✕</button>
+  </div>
+
   <nav class="tabs" role="tablist">
     <button class="tab active" data-view="timeline">Journal</button>
     <button class="tab" data-view="calendar">Calendar</button>
@@ -56,6 +62,11 @@
       <div id="speciesList"></div>
     </section>
     <section id="view-settings" class="view">
+      <div class="card" id="installCard" hidden>
+        <h2>Install the app</h2>
+        <p class="muted" id="installCardText">Install it to your home screen so it opens like a normal app, full screen and offline.</p>
+        <button class="btn primary wide" id="installBtn2">Install app</button>
+      </div>
       <div class="card">
         <h2>Cloud sync</h2>
         <div id="cloudNotSetUp"><p class="muted">Cloud sync isn't connected yet.</p></div>

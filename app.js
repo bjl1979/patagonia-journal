@@ -1,5 +1,5 @@
 // Field Journal — offline travel diary. Phase 1: capture. Phase 2 (later): book builder.
-const APP_VERSION = '1.5.2';
+const APP_VERSION = '1.5.3';
 const SPECIES = [
   'Puma', 'Guanaco', 'Andean Condor', "Darwin's Rhea (Ñandú)", 'Huemul', 'Culpeo Fox',
   'South American Grey Fox', 'Patagonian Hog-nosed Skunk', 'Pichi (Armadillo)', 'Magellanic Penguin',
@@ -84,6 +84,7 @@ async function boot() {
   if (navigator.storage?.persist) navigator.storage.persist().catch(() => {});
   setTimeout(checkOffline, 1500); setTimeout(checkOffline, 8000);
   wireCloud();
+  wireInstall();
   await renderAll();
   Sync.init(() => renderAll());
 }
@@ -837,6 +838,45 @@ async function deleteEntry() {
   // keep a tombstone so the delete reaches the other phone and the cloud
   await DB.put('entries', { id, at: e.at, tz: e.tz, deleted: true, updated: Date.now(), dirty: true });
   closeEditor(); await renderAll(); Sync.soon(); toast('Entry deleted');
+}
+
+// ---------------- install button ----------------
+let installPrompt = null;
+const isStandalone = () => matchMedia('(display-mode: standalone)').matches || navigator.standalone === true;
+const isIOS = () => /iPhone|iPad|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+function renderInstall() {
+  const show = !isStandalone() && (installPrompt || isIOS());
+  let hidden = false; try { hidden = sessionStorage.getItem('installLater') === '1'; } catch (e) {}
+  $('#installBar').hidden = !show || hidden;
+  $('#installCard').hidden = !show;
+  if (isIOS() && !installPrompt) {
+    $('#installText').textContent = 'Install: tap Share ⬆︎ then “Add to Home Screen”';
+    $('#installBtn').textContent = 'How?';
+    $('#installCardText').textContent = 'In Safari, tap the Share button ⬆︎ at the bottom, then “Add to Home Screen”, then Add.';
+    $('#installBtn2').hidden = true;
+  }
+}
+async function doInstall() {
+  if (installPrompt) {
+    const p = installPrompt;
+    installPrompt = null;
+    p.prompt();
+    const { outcome } = await p.userChoice.catch(() => ({ outcome: 'dismissed' }));
+    toast(outcome === 'accepted' ? 'Installing… find Field Journal on your home screen' : 'Not installed — you can try again any time from Backup');
+  } else if (isIOS()) {
+    alert('In Safari: tap the Share button ⬆︎ at the bottom of the screen, scroll down, tap “Add to Home Screen”, then Add.');
+  } else {
+    toast('Install isn’t available right now — reload the page and try again', 5000);
+  }
+  renderInstall();
+}
+function wireInstall() {
+  addEventListener('beforeinstallprompt', (e) => { e.preventDefault(); installPrompt = e; renderInstall(); });
+  addEventListener('appinstalled', () => { installPrompt = null; renderInstall(); toast('Installed ✓ — open it from your home screen'); });
+  $('#installBtn').addEventListener('click', doInstall);
+  $('#installBtn2').addEventListener('click', doInstall);
+  $('#installLater').addEventListener('click', () => { try { sessionStorage.setItem('installLater', '1'); } catch (e) {} $('#installBar').hidden = true; });
+  renderInstall();
 }
 
 // ---------------- cloud sync UI ----------------

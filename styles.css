@@ -340,3 +340,7 @@ img[src=""] { visibility: hidden; }
 .offline-ready.ok { color: #2e7d4f; background: #e3f2e8; }
 .offline-ready.no { color: var(--danger); background: #f8e6e4; }
 @media (prefers-color-scheme: dark) { .offline-ready.ok { background: #183325; color: #7fd18b; } .offline-ready.no { background: #3a1f1c; } }
+.install-bar { display: flex; align-items: center; gap: 10px; background: var(--warm); color: #fff; padding: 8px 12px 8px 16px; font-size: 14px; font-weight: 600; }
+.install-bar span { flex: 1; }
+.install-bar .btn.primary { background: #fff; color: #14211f; }
+.install-bar .link { color: #fff; font-size: 16px; }
