@@ -11,7 +11,8 @@ Long-term goal: turn the journal into a photography book.
 - Files: `index.html` (layout), `styles.css`, `app.js` (all app logic), `db.js` (storage), `utils.js` (EXIF reader, photo resize, zip writer/reader),
   `sync.js` (Supabase cloud sync, plain fetch), `config.js` (Supabase URL + anon/publishable key — public by design; never the service_role key),
   `setup.sql` (tables, RLS, private `journal` storage bucket — paste into Supabase SQL Editor),
-  `weather.js` (Open-Meteo forecast + per-entry/day weather; golden hour from a solar-elevation calc).
+  `weather.js` (Open-Meteo forecast + per-entry/day weather; golden hour from a solar-elevation calc),
+  `plans.js` (Plans tab: sections + checklist items).
 
 ## Cloud sync (v1.2.0)
 - Offline-first. Every local change sets `dirty: true`; deletes are tombstones (`deleted: true`, media blob dropped) so they sync.
@@ -62,3 +63,8 @@ which is how two phones (iPhone + Android) are combined.
   Forecast at GPS (fallback: last entry) saved in settings `wxForecast` (16 days) → offline uses saved hourly for "now"; expired forecast hides forecast sections.
   Per-entry/day weather fetched per day+0.1° cell into settings `wxDays` (local only, NOT synced — avoids overwriting edits from the other phone); shown on day card,
   entry view, Trip weather list, and exported in backup journal.json as entry.weather. Workspace can't reach open-meteo; tested with wxmock.mjs.
+- 2026-11-09 (v1.7.0): Plans tab (6 tabs; tab bar scrolls if too narrow). Bobby wants NO dates/reminders — plans are ideas & lists (things to buy, shot ideas, packing).
+  Rows live in the `entries` store/table with kind 'plan-section' | 'plan-item' (sectionId, text, note, done, heading, order) so they sync with no setup.sql change;
+  one row per item so ticks on two phones merge. liveEntries() excludes plan rows (journal/calendar/map/weather never see them). Templates: Blank, Things to buy,
+  Shot ideas, Packing (‘# ’ lines = headings). Item sheet: edit text/note, move up/down, delete. Section ⋯: rename/icon, untick all, remove ticked, delete (type DELETE).
+  Tapping Plans tab again returns to the section list. Backup journal.json has `plans`.

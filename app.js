@@ -1,5 +1,5 @@
 // Field Journal — offline travel diary. Phase 1: capture. Phase 2 (later): book builder.
-const APP_VERSION = '1.6.0';
+const APP_VERSION = '1.7.0';
 const SPECIES = [
   'Puma', 'Guanaco', 'Andean Condor', "Darwin's Rhea (Ñandú)", 'Huemul', 'Culpeo Fox',
   'South American Grey Fox', 'Patagonian Hog-nosed Skunk', 'Pichi (Armadillo)', 'Magellanic Penguin',
@@ -40,7 +40,7 @@ function toast(msg, ms = 2600) {
 }
 function trackURL(blob) { if (!blob) return ''; const u = URL.createObjectURL(blob); urls.push(u); return u; }
 const src = (m) => m.blob || m.thumb;                      // full photo, or preview if freed to the cloud
-const liveEntries = async () => (await DB.all('entries')).filter(e => !e.deleted);
+const liveEntries = async () => (await DB.all('entries')).filter(e => !e.deleted && !Plans.isPlan(e));   // journal only, never plans
 const liveMediaAll = async () => (await DB.all('media')).filter(m => !m.deleted);
 async function tombstoneMedia(id) {
   const m = await DB.get('media', id);
@@ -85,6 +85,7 @@ async function boot() {
   setTimeout(checkOffline, 1500); setTimeout(checkOffline, 8000);
   wireCloud();
   wireInstall();
+  Plans.wire();
   await WX.loadDays();
   await renderAll();
   Sync.init(() => { renderAll(); setTimeout(() => updateWeather(), 1500); });
@@ -119,10 +120,12 @@ function renderSyncState(st) {
 }
 
 function showView(v) {
+  if (v === 'plans' && $('#view-plans').classList.contains('active')) return Plans.home();   // tap again → list of sections
   $$('.tab').forEach(t => t.classList.toggle('active', t.dataset.view === v));
   $$('.view').forEach(s => s.classList.toggle('active', s.id === 'view-' + v));
   $('#gearBtn').classList.toggle('on', v === 'settings');
-  $('#captureBar').style.display = ['settings', 'calendar', 'map', 'weather'].includes(v) ? 'none' : '';
+  $('#captureBar').style.display = ['settings', 'calendar', 'map', 'weather', 'plans'].includes(v) ? 'none' : '';
+  if (v === 'plans') Plans.render();
   if (v === 'map') showMap();
   if (v === 'weather') { renderWeather(); updateWeather({ force: false }); }
   if (v === 'settings') renderStorage();
@@ -150,6 +153,7 @@ async function renderAll() {
   renderSpecies(entries, media);
   renderBackupInfo(entries.length);
   renderSyncState(Sync.state);
+  if ($('#view-plans').classList.contains('active')) Plans.render();
 }
 
 // ---------------- days: Journal shows one day at a time (today by default) ----------------
@@ -1058,6 +1062,7 @@ async function exportBackup() {
       device: settings.deviceName, trip: { name: settings.tripName, start: settings.tripStart },
       entries: entries.map(e => ({ ...e, localTime: new Date(e.at).toLocaleString('sv-SE', { timeZone: e.tz }), tripDay: tripDay(dayKey(e.at, e.tz)), weather: WX.forEntry(e, entryDay) || undefined })),
       media: mediaIndex,
+      plans: await Plans.exportData(),
     };
     const enc = new TextEncoder();
     files.unshift({ name: 'journal.json', data: enc.encode(JSON.stringify(journal, null, 2)) });

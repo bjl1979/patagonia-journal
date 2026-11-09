@@ -39,6 +39,7 @@
     <button class="tab" data-view="map">Map</button>
     <button class="tab" data-view="weather">Weather</button>
     <button class="tab" data-view="species">Species</button>
+    <button class="tab" data-view="plans">Plans</button>
   </nav>
 
   <main>
@@ -63,6 +64,9 @@
     </section>
     <section id="view-weather" class="view">
       <div id="weather"></div>
+    </section>
+    <section id="view-plans" class="view">
+      <div id="plans"></div>
     </section>
     <section id="view-species" class="view">
       <div id="speciesList"></div>
@@ -200,6 +204,36 @@
       <button class="link wide" id="chooseCancel">Cancel</button>
     </div>
   </div>
+  <!-- Plans: section sheet -->
+  <div class="chooser-backdrop" id="plSecSheet" hidden>
+    <div class="chooser psheet" role="dialog" aria-labelledby="plSecHead">
+      <h3 id="plSecHead">New section</h3>
+      <label class="field">Name <input id="plSecName" placeholder="e.g. Things to buy" maxlength="60"></label>
+      <div class="field">Icon</div>
+      <div class="picons" id="plIcons"></div>
+      <div id="plTplWrap"><div class="field">Start from</div><div class="ptpls" id="plTpls"></div></div>
+      <div id="plSecExtra" hidden>
+        <button class="btn wide" id="plUntickAll">Untick all items</button>
+        <button class="btn wide" id="plClearDone">Remove ticked items</button>
+        <button class="btn danger wide" id="plDelSec">Delete section</button>
+      </div>
+      <button class="btn primary wide" id="plSecSave">Create section</button>
+      <button class="link wide" id="plSecCancel">Cancel</button>
+    </div>
+  </div>
+  <!-- Plans: item sheet -->
+  <div class="chooser-backdrop" id="plItemSheet" hidden>
+    <div class="chooser psheet" role="dialog" aria-labelledby="plItemTitle">
+      <h3 id="plItemTitle">Edit item</h3>
+      <label class="field">Item <input id="plItemText" maxlength="200"></label>
+      <label class="field" id="plItemNoteWrap">Note (optional) <input id="plItemNote" placeholder="e.g. which model, where, why" maxlength="300"></label>
+      <div class="row"><button class="btn small" id="plItemUp" style="flex:1">↑ Move up</button><button class="btn small" id="plItemDown" style="flex:1">↓ Move down</button></div>
+      <button class="btn primary wide" id="plItemSave">Save</button>
+      <button class="btn danger wide" id="plItemDel">Delete</button>
+      <button class="link wide" id="plItemCancel">Cancel</button>
+    </div>
+  </div>
+
   <div class="viewer" id="viewer" hidden></div>
   <div class="toast" id="toast" hidden></div>
 
@@ -209,6 +243,7 @@
   <script src="utils.js"></script>
   <script src="sync.js"></script>
   <script src="weather.js"></script>
+  <script src="plans.js"></script>
   <script src="app.js"></script>
 </body>
 </html>
